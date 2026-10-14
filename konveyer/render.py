@@ -18,7 +18,7 @@ from konveyer.speech import SKIP_CAPTIONS
 from konveyer.timeline import append_source_tail, kept_duration, keep_intervals, select_expr
 from konveyer.transcript import Transcript, Word
 from konveyer.translate import translate_texts
-from konveyer.util import KonveyerError, need_tool, read_json, run, write_json
+from konveyer.util import KonveyerError, filter_complex_args, need_tool, read_json, run, write_json
 from konveyer.voice import (VoiceOver, align_cues_to_voice, duck_expr, plan_clip_tail,
                             separate_music, voice_gate)
 
@@ -293,7 +293,7 @@ class Renderer:
                "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(src.resolve())]
         for name in extra or []:
             cmd += ["-i", name]
-        cmd += ["-filter_complex", graph, "-map", "[v]"]
+        cmd += [*filter_complex_args(graph), "-map", "[v]"]
         if has_a:
             cmd += ["-map", "[a]", "-c:a", "aac", "-b:a", "192k"]
         cmd += [*enc.args, "-r", str(self.s.render.fps), "-movflags", "+faststart", out.name]

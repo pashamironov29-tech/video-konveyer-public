@@ -27,6 +27,7 @@ import random
 import re
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -969,13 +970,22 @@ def read_mark_file(path: Path) -> list[WordMark]:
 
 
 def write_wav(path: Path, samples: np.ndarray, rate: int) -> None:
+    """Запись через временный файл: кэш озвучки читается по одному факту «файл есть»,
+    поэтому оборванный или недописанный wav не должен появляться под настоящим именем."""
     pcm = (np.clip(samples, -1.0, 1.0) * 32767).astype("<i2")
     path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(path), "wb") as w:
-        w.setnchannels(1)
-        w.setsampwidth(2)
-        w.setframerate(rate)
-        w.writeframes(pcm.tobytes())
+    fd, tmp = tempfile.mkstemp(prefix=path.stem + ".", suffix=".wav.tmp", dir=path.parent)
+    os.close(fd)
+    try:
+        with wave.open(tmp, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(rate)
+            w.writeframes(pcm.tobytes())
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def read_wav(path: Path) -> tuple[np.ndarray, int]:
@@ -1924,6 +1934,7 @@ class VoiceOver:
         if workers <= 1 or engine.name != "edge" or not hasattr(engine, "synth_sentence"):
             return
         jobs = []
+        queued: set[str] = set()
         for idxs in blocks:
             parts = [phrases[i] for i in idxs]
             text = " ".join(p.said for p in parts if p.said).strip()
@@ -1932,8 +1943,11 @@ class VoiceOver:
             voice = parts[0].voice or ""
             pros = block_prosody(text, self.cfg, 1.0, base_rate, max_rate)
             extra = pros.key() + (f"|voice={voice}" if voice else "")
-            if (self.cache_dir / f"{self._key(engine, text, extra)}.wav").is_file():
+            key = self._key(engine, text, extra)
+            # Одинаковая фраза — один файл кэша: два потока писали бы его одновременно
+            if key in queued or (self.cache_dir / f"{key}.wav").is_file():
                 continue
+            queued.add(key)
             jobs.append((text, pros, voice))
         if len(jobs) < 2:
             return

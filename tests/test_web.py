@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import json
 import threading
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -107,9 +106,9 @@ def test_create_full_job(web):
     assert "count" not in opts and "layout" not in opts and "zoom" not in opts
     code, raw, _ = req(base + "/")
     assert "целое видео" in raw.decode("utf-8")
-    assert req(base + "/api/jobs", {"source": "x", "full": True, "full_from": "нет"})[0] == 400
-    assert req(base + "/api/jobs", {"source": "x", "full_from": "20", "full_to": "5"})[0] == 400
-    code, raw, _ = req(base + "/api/jobs", {"source": "x", "full_from": "1", "full_to": "5"})
+    assert req(base + "/api/jobs", {"source": "https://youtu.be/x", "full": True, "full_from": "нет"})[0] == 400
+    assert req(base + "/api/jobs", {"source": "https://youtu.be/x", "full_from": "20", "full_to": "5"})[0] == 400
+    code, raw, _ = req(base + "/api/jobs", {"source": "https://youtu.be/x", "full_from": "1", "full_to": "5"})
     assert code == 201
     opts = Job.load(settings.jobs_dir / jbody(raw)["id"]).data["options"]
     assert opts["full"] is True and opts["full_from"] == 1 and opts["full_to"] == 5
@@ -206,7 +205,7 @@ def test_status_defaults_and_zoom_job(web):
     opts = Job.load(settings.jobs_dir / jbody(raw)["id"]).data["options"]
     assert opts["zoom"] == 1.7 and opts["subs_style"] == "big"
     assert opts["score"] is True and opts["vision_check"] is True
-    assert req(base + "/api/jobs", {"source": "x", "zoom": 3})[0] == 400
+    assert req(base + "/api/jobs", {"source": "https://youtu.be/x", "zoom": 3})[0] == 400
 
 
 def test_clip_zoom_saved(web):
@@ -230,7 +229,7 @@ def test_create_job_cover_options(web):
     wait_idle(app)
     opts = Job.load(settings.jobs_dir / jbody(raw)["id"]).data["options"]
     assert opts["cover_mode"] == "ai" and opts["cover"] is False
-    code, raw, _ = req(base + "/api/jobs", {"source": "x", "cover_mode": "sideways"})
+    code, raw, _ = req(base + "/api/jobs", {"source": "https://youtu.be/x", "cover_mode": "sideways"})
     assert code == 201
     wait_idle(app)
     opts = Job.load(settings.jobs_dir / jbody(raw)["id"]).data["options"]
@@ -258,7 +257,7 @@ def test_job_page_serves_cover_preview(web):
 def test_create_job_validation(web):
     base, *_ = web
     assert req(base + "/api/jobs", {"source": "  "})[0] == 400
-    assert req(base + "/api/jobs", {"source": "x", "count": "много"})[0] == 400
+    assert req(base + "/api/jobs", {"source": "https://youtu.be/x", "count": "много"})[0] == 400
 
 
 def test_clip_edit_and_busy(web):

@@ -14,6 +14,9 @@ subs_dir = ""                             # необязательно: папк
 max_height = 1080
 cookies_file = ""                         # свой cookies.txt для yt-dlp / your cookies.txt, e.g. "cookies/youtube_cookies.txt" (git-ignored)
 cookies_from_browser = ""                 # "firefox" или "chrome", если Instagram/X просят вход
+# Локальный файл копируется в папку задания. true — жёсткая ссылка (быстро и без места на диске),
+# но это тот же файл, что у тебя: правка в jobs/ изменит и оригинал. / true = hard link instead of copy.
+link_local = false
 
 [whisper]
 device = "auto"                           # auto | cuda | cpu
@@ -62,6 +65,8 @@ crf = 20
 # заголовок и субтитры на фоне, не на лицах. Старый зум (крупнее, бока обрезаны): zoom = 1.5
 zoom = 1.0
 zoom_center = false                       # true — зум ровно по центру, без слежения за лицом (--zoom-center)
+# font_title = ""                         # пусто — системный шрифт (Arial / DejaVu / Noto), затем assets/fonts
+# font_text = ""
 
 [subs]
 style = "normal"                          # normal | big (крупные субтитры по 1–2 слова)
@@ -106,7 +111,7 @@ gain_db = 0
 separate = false                          # demucs: убрать голос оригинала (--separate)
 demucs_model = "htdemucs"
 sample = ""                               # xtts: чистая запись голоса 10–30 с, только с согласия владельца
-xtts_python = ""                          # python.exe venv с coqui-tts, например xtts-venv/Scripts/python.exe
+xtts_python = ""                          # venv с coqui-tts: Linux xtts-venv/bin/python, Windows xtts-venv/Scripts/python.exe
 # Частые слова для озвучки. Цифры и остальная латиница переводятся сами.
 # Пустое значение слово не подменяет. Субтитры этим словарём не меняются.
 replacements = { GPT = "джи-пи-ти", AI = "эй-ай" }
@@ -199,6 +204,8 @@ text_color = "#FFFFFF"
 accent_color = "#FFE14A"                 # плашка с именем спикера
 stroke_color = "#000000"
 
+# Веб-интерфейс без пароля — только на этом компьютере: host 127.0.0.1, localhost или ::1.
+# Web UI has no password — loopback only (127.0.0.1, localhost or ::1).
 [web]
 host = "127.0.0.1"
 port = 8765

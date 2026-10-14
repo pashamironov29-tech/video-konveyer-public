@@ -227,14 +227,14 @@ def full_caption(meta: dict) -> str:
 
     title = " ".join(scrub_platforms(str(meta.get("title") or "Видео")).split()) or "Видео"
     lines = [title, _who_line(meta)]
-    return "\n".join(l for l in lines if l)[:CAPTION_LIMIT]
+    return "\n".join(line for line in lines if line)[:CAPTION_LIMIT]
 
 
 def clip_caption(clip: dict, meta: dict) -> str:
     title = " ".join(clip.get("title", "").replace("|", " ").split())
     bottom = " ".join(clip.get("bottom", "").replace("|", " ").split())
     lines = [f"Клип {clip['id']}: {title}".strip(), bottom, _who_line(meta)]
-    return "\n".join(l for l in lines if l)
+    return "\n".join(line for line in lines if line)
 
 
 def send_job(job: Job, settings: Settings, log: Log, clips: bool = True, post: bool = True,

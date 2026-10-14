@@ -14,7 +14,6 @@ import re
 import threading
 import traceback
 import webbrowser
-from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Callable
@@ -29,6 +28,30 @@ from konveyer.i18n import get_lang, tr
 
 STATIC = Path(__file__).resolve().parent / "static"
 JOB_ID = re.compile(r"^[\w.\-]+$")
+LOOPBACK_NAMES = ("127.0.0.1", "localhost", "[::1]")
+
+
+def allowed_host(header: str | None, port: int) -> bool:
+    """Host только наш: 127.0.0.1 / localhost / [::1] на нашем порту.
+    Чужое имя в Host — признак DNS rebinding: страница из интернета, которая
+    притворяется нашим адресом и обходит политику одного источника."""
+    value = (header or "").strip().lower()
+    return value in {f"{name}:{port}" for name in LOOPBACK_NAMES}
+
+
+def check_source(source: str) -> None:
+    """Источник из веба: ссылка или существующий видеофайл. Остальные файлы
+    с диска через веб не берём — иначе их можно было бы скачать через /files/."""
+    from konveyer.ingest import VIDEO_EXT
+    from konveyer.util import is_url
+
+    if is_url(source):
+        return
+    path = Path(source.strip('"')).expanduser()
+    if path.suffix.lower() not in VIDEO_EXT:
+        raise ValueError("через веб можно взять только видеофайл (" + ", ".join(VIDEO_EXT) + ")")
+    if not path.is_file():
+        raise ValueError(f"файл не найден: {path}")
 
 
 def num_param(data: dict, key: str, lo: float, hi: float, integer: bool = False):
@@ -54,6 +77,10 @@ def num_param(data: dict, key: str, lo: float, hi: float, integer: bool = False)
 
 
 Task = tuple[str, str, dict]          # (id задания, вид, данные)
+
+
+class Busy(KonveyerError):
+    """Задание уже в очереди или в работе (ответ 409)."""
 
 
 def default_runner(settings: Settings, job: Job, kind: str, data: dict) -> None:
@@ -91,14 +118,29 @@ class App:
         self.tasks: queue.Queue[Task | None] = queue.Queue()
         self.active: str = ""
         self.pending: set[str] = set()
+        self._guard = threading.Lock()
         self._worker = threading.Thread(target=self._loop, daemon=True, name="konveyer-worker")
         self._worker.start()
 
     # ---------- очередь
     def submit(self, job: Job, kind: str, data: dict | None = None) -> None:
+        if not self.try_submit(job, kind, data):
+            raise Busy("задание уже в работе — подожди")
+
+    def try_submit(self, job: Job, kind: str, data: dict | None = None) -> bool:
+        """Поставить в очередь, если задание ещё не там. Проверка и постановка — под одним
+        замком: два запроса одновременно не поставят одно задание дважды."""
+        with self._guard:
+            if job.id in self.pending:
+                return False
+            self.pending.add(job.id)
         job.set_state("queued", kind)
-        self.pending.add(job.id)
         self.tasks.put((job.id, kind, data or {}))
+        return True
+
+    def busy(self, job_id: str) -> bool:
+        with self._guard:
+            return job_id in self.pending
 
     def _loop(self) -> None:
         while True:
@@ -121,7 +163,8 @@ class App:
                         f.write(mask(traceback.format_exc()) + "\n")
             finally:
                 self.active = ""
-                self.pending.discard(job_id)
+                with self._guard:
+                    self.pending.discard(job_id)
                 self.tasks.task_done()
 
     def stop(self) -> None:
@@ -186,8 +229,19 @@ def make_handler(app: App):
             lang = (self.headers.get("X-Konveyer-Lang") or "").strip().lower()
             self._json({"error": tr(msg, lang if lang in ("ru", "en") else None)}, status)
 
+        def _host_ok(self) -> bool:
+            if allowed_host(self.headers.get("Host"), self.server.server_address[1]):
+                return True
+            self._error(403, "чужой адрес в заголовке Host")
+            return False
+
         def _body(self) -> dict:
-            n = int(self.headers.get("Content-Length") or 0)
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                raise ValueError("неверный Content-Length") from None
+            if n < 0:
+                raise ValueError("неверный Content-Length")
             if n > 2_000_000:
                 raise ValueError("слишком большой запрос")
             raw = self.rfile.read(n) if n else b"{}"
@@ -243,6 +297,8 @@ def make_handler(app: App):
             self.do_GET()
 
         def do_GET(self):
+            if not self._host_ok():
+                return
             path = unquote(urlparse(self.path).path)
             try:
                 if path in ("/", "/index.html"):
@@ -259,7 +315,6 @@ def make_handler(app: App):
                         "secrets": {n: has_secret(n) for n in SECRET_NAMES},
                         "defaults": {"zoom": app.settings.render.zoom,
                                      "subs_style": app.settings.subs.style},
-                        "jobs_dir": str(app.settings.jobs_dir),
                         "lang": get_lang()})
                 if path == "/api/jobs":
                     return self._json([j.summary() for j in list_jobs(app.settings)])
@@ -288,6 +343,8 @@ def make_handler(app: App):
 
         # ---------- POST
         def do_POST(self):
+            if not self._host_ok():
+                return
             if self.headers.get("X-Konveyer") != "1":
                 return self._error(403, "нет заголовка X-Konveyer")
             path = unquote(urlparse(self.path).path)
@@ -297,6 +354,7 @@ def make_handler(app: App):
                     source = str(data.get("source", "")).strip()
                     if not source:
                         return self._error(400, "нужна ссылка или путь к файлу")
+                    check_source(source)
                     opts = {}
                     for key, lo, hi, integer in (("count", 1, 10, True), ("min", 3, 600, False),
                                                  ("max", 5, 600, False)):
@@ -357,7 +415,8 @@ def make_handler(app: App):
                 if not job:
                     return self._error(404, "задание не найдено")
                 action, num = m.group(2), m.group(3)
-                if job.id in app.pending and action != "post_text":
+                if app.busy(job.id) and (action != "post_text" or job.data.get("current") == "post"):
+                    # правку поста можно и во время рендера, но не пока шаг «пост» его переписывает
                     return self._error(409, "задание уже в работе — подожди")
                 if action == "clips" and num:
                     clip = job.clip(int(num))
@@ -401,6 +460,8 @@ def make_handler(app: App):
                     app.submit(job, "send", payload)
                     return self._json({"ok": True})
                 return self._error(404, "неизвестное действие")
+            except Busy as e:
+                return self._error(409, str(e))
             except (KonveyerError, ValueError, KeyError, json.JSONDecodeError) as e:
                 return self._error(400, mask(str(e)))
             except Exception as e:

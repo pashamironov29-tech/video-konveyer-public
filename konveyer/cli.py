@@ -16,12 +16,12 @@ from konveyer.jobs import STEP_NAMES, STEPS, Job, find_job, list_jobs
 from konveyer.log import Log
 from konveyer import i18n
 from konveyer.i18n import tr
+from konveyer.util import KonveyerError, fmt_time
 import builtins as _builtins
 
 
 def print(*args, **kwargs):  # noqa: A001 — interface output goes through the translator
     _builtins.print(*(tr(a) if isinstance(a, str) else a for a in args), **kwargs)
-from konveyer.util import KonveyerError, fmt_time
 
 
 def _add_job_options(p: argparse.ArgumentParser) -> None:
@@ -617,7 +617,9 @@ def doctor_report(settings) -> list[tuple[str, bool, str]]:
             pass
         rows.append(("deno", True, ver))
     else:
-        rows.append(("deno", False, "нет в PATH — для YouTube: winget install DenoLand.Deno"))
+        rows.append(("deno", False,
+                     "нет в PATH — для YouTube: winget install DenoLand.Deno "
+                     "или curl -fsSL https://deno.land/install.sh | sh"))
     if shutil.which("ffmpeg"):
         enc = detect_encoder(settings.render.encoder, settings.render.crf, settings.render.preset)
         rows.append(("видеокодировщик", True, enc.title))
@@ -773,6 +775,18 @@ COMMANDS = {"run": cmd_run, "full": cmd_full, "jobs": cmd_jobs, "show": cmd_show
             "config": cmd_config, "cleanup": cmd_cleanup}
 
 
+def _early_lang(args: list[str]) -> None:
+    """[ui] lang из конфига — до сборки справки, иначе --help всегда по-русски."""
+    pre = argparse.ArgumentParser(add_help=False)
+    pre.add_argument("--config", type=Path)
+    pre.add_argument("--set", action="append", default=[])
+    known, _ = pre.parse_known_args(args)
+    try:
+        i18n.init_from_settings(load_settings(known.config, _overrides(known.set)))
+    except (KonveyerError, OSError, ValueError):
+        pass                                          # ошибку конфига покажет основной разбор
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         try:
@@ -785,6 +799,7 @@ def main(argv: list[str] | None = None) -> int:
             i18n.set_lang(args[i + 1])
         elif x.startswith("--lang="):
             i18n.set_lang(x.split("=", 1)[1])
+    _early_lang(args)
     parser = build_parser()
     i18n.translate_parser(parser)
     a = parser.parse_args(args)

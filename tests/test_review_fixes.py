@@ -29,7 +29,7 @@ def test_font_falls_back_to_assets(tmp_path):
 
 def test_font_none_when_nothing(tmp_path, monkeypatch):
     import konveyer.layout as layout
-    monkeypatch.setattr(layout, "SYSTEM_FONTS", ())
+    monkeypatch.setattr(layout, "font_candidates", lambda: [])
     assert resolve_text_font("/nope/x.ttf", tmp_path) is None
 
 

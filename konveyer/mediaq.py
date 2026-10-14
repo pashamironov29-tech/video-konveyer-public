@@ -324,7 +324,6 @@ def measure_audio(path: Path) -> tuple[dict, bool]:
     err = proc.stderr or ""
     stats = parse_volume(err)
     stats["silence"] = parse_silence(err)
-    readable = proc.returncode == 0 and stats["mean_db"] is not None
     if proc.returncode != 0 and stats["mean_db"] is None:
         return stats, False
     return stats, proc.returncode == 0 or stats["mean_db"] is not None

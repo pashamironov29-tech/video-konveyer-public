@@ -56,7 +56,7 @@ def test_slugify_translit():
 
 def test_ffmpeg_filter_path_escapes_colon():
     assert ffmpeg_filter_path(r"C:\Windows\Fonts\arial.ttf") == r"C\:/Windows/Fonts/arial.ttf"
-    assert ffmpeg_filter_path("it's.txt") == r"it\'s.txt"
+    assert ffmpeg_filter_path("it's.txt") == r"it'\\\''s.txt"
 
 
 def test_json_roundtrip_cyrillic(tmp_path):

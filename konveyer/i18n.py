@@ -703,7 +703,8 @@ _EN.update({
     "ui.lang: ru или en": "ui.lang: ru or en",
     # doctor
     "не найден в PATH": "not found in PATH",
-    "нет в PATH — для YouTube: winget install DenoLand.Deno": "not in PATH — needed for YouTube: winget install DenoLand.Deno",
+    "нет в PATH — для YouTube: winget install DenoLand.Deno или curl -fsSL https://deno.land/install.sh | sh":
+        "not in PATH — for YouTube: winget install DenoLand.Deno or curl -fsSL https://deno.land/install.sh | sh",
     "видеокодировщик": "video encoder", "CUDA для Whisper": "CUDA for Whisper", "устройств: ": "devices: ",
     "нет — Whisper на процессоре (модель ": "no — Whisper on CPU (model ",
     "слежение за лицом": "face tracking", "не установлен (": "not installed (", "диаризация": "diarization",
@@ -745,5 +746,12 @@ _EN.update({
         "voiceover skipped: it needs a Russian translation, but DEEPSEEK_API_KEY is not set",
     "ролик короткий — берём целиком": "video is short — taking it whole",
     "Ссылка или путь к видео: ": "Video URL or path: ",
+    # web: защита локального интерфейса
+    "чужой адрес в заголовке Host": "foreign address in the Host header",
+    "неверный Content-Length": "invalid Content-Length",
+    "через веб можно взять только видеофайл (": "the web UI accepts only a video file (",
+    "web.host: только 127.0.0.1, localhost или ::1 — у веб-интерфейса нет пароля, наружу его открывать нельзя":
+        "web.host: only 127.0.0.1, localhost or ::1 — the web UI has no password and must not be exposed",
+    "web.port от 0 до 65535": "web.port must be 0 to 65535",
 })
 _frag_cache = None

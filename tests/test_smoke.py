@@ -38,8 +38,8 @@ def test_example_config_and_env_example():
     from konveyer.config import load_settings
     s = load_settings(ROOT / "konveyer.toml.example", root=ROOT)
     assert s.ui.lang in ("ru", "en")
-    keys = {l.split("=")[0] for l in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
-            if l and not l.startswith("#")}
+    keys = {line.split("=")[0] for line in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines()
+            if line and not line.startswith("#")}
     from konveyer.envkeys import SECRET_NAMES
     assert {"DEEPSEEK_API_KEY", "TG_BOT_TOKEN", "TG_CHAT_ID", "HF_TOKEN"} <= keys
     assert set(SECRET_NAMES) - keys <= {"HUGGING_FACE_HUB_TOKEN"}

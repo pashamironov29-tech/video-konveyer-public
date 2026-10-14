@@ -252,7 +252,10 @@ async function loadStatus() {
   try {
     status = await api("/api/status");
     const keys = Object.entries(status.secrets).map(([k, v]) => `${k}: ${v ? "есть" : "нет"}`).join(" · ");
-    if (!LANG) applyLang(status.lang || "ru");
+    // ручной выбор в браузере живёт, пока на сервере не сменили язык (--lang / [ui] lang)
+    const serverLang = status.lang || "ru";
+    if (!LANG || localStorage.getItem("konveyer.lang.server") !== serverLang) applyLang(serverLang);
+    localStorage.setItem("konveyer.lang.server", serverLang);
     $("#status").textContent = L((status.active ? `в работе: ${status.active} · ` : "") +
       (status.queued ? `в очереди: ${status.queued} · ` : "") + keys);
   } catch (e) { $("#status").textContent = L("сервер не отвечает"); }

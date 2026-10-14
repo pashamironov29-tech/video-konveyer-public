@@ -8,6 +8,8 @@
 """
 from __future__ import annotations
 
+import os
+import sys
 from pathlib import Path
 
 from dataclasses import dataclass
@@ -102,30 +104,54 @@ def _fit_block(lines: list[str], max_size: int, room: int, width: int) -> tuple[
     return size, gap, block
 
 
+# Каталоги дистрибутивов, не личные пути. Debian/Ubuntu, Arch и SteamOS (Steam Deck), macOS.
 SYSTEM_FONTS = (
-    "C:/Windows/Fonts/arialbd.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/liberation/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/noto/NotoSans-Bold.ttf",
+    "/usr/share/fonts/TTF/NotoSans-Bold.ttf",
     "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
     "/Library/Fonts/Arial Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
 )
 
 
+def font_candidates() -> list[Path]:
+    """Системные шрифты текущей ОС. На Windows — из %WINDIR%\\Fonts, без зашитого диска."""
+    paths: list[Path] = []
+    if sys.platform == "win32":
+        fonts = Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"
+        paths.extend(fonts / name for name in ("ariblk.ttf", "arialbd.ttf", "arial.ttf"))
+    paths.extend(Path(item) for item in SYSTEM_FONTS)
+    return paths
+
+
+def _bundled_fonts(root: Path) -> list[Path]:
+    fonts_dir = root / "assets" / "fonts"
+    if not fonts_dir.is_dir():
+        return []
+    return sorted(fonts_dir.glob("*.ttf")) + sorted(fonts_dir.glob("*.otf"))
+
+
 def resolve_text_font(configured: str, root: Path, log=None, label: str = "") -> str | None:
-    """Шрифт для drawtext: путь из конфига → assets/fonts → DejaVu/Liberation/Arial в системе.
+    """Шрифт для drawtext. Пустой конфиг: системный шрифт, затем assets/fonts.
+    Заданный, но отсутствующий файл: assets/fonts, затем система.
     None — шрифта нет нигде (надписи тогда выключаются, рендер не падает)."""
     custom = (configured or "").strip()
+    bundled = _bundled_fonts(root)
+    system = font_candidates()
     if custom:
         path = Path(custom)
         if not path.is_absolute():
             path = root / path
         if path.is_file():
             return str(path)
-    fonts_dir = root / "assets" / "fonts"
-    bundled = sorted(fonts_dir.glob("*.ttf")) + sorted(fonts_dir.glob("*.otf")) if fonts_dir.is_dir() else []
-    for cand in [*bundled, *(Path(f) for f in SYSTEM_FONTS)]:
+        order = [*bundled, *system]
+    else:
+        order = [*system, *bundled]
+    for cand in order:
         if cand.is_file():
             if custom and log:
                 log.warn(f"шрифт надписей не найден ({custom}), беру {cand.name}")

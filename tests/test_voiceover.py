@@ -358,8 +358,10 @@ def test_voiceover_edge_keeps_gap_between_sentences(settings, tmp_path, monkeypa
             Cue(2.0, 2.3, "Дальше.")]
     track = VoiceOver(tmp_path, settings, Log(None, echo=False), None,
                       engine=_edge(settings, tmp_path, fn)).make(tmp_path, cues, 4.0, 1)
-    assert [c["text"] for c in calls] == ["А как дела?", "Дальше."]
-    assert calls[0]["pitch"] == "+8Hz" and calls[1]["pitch"] == "+0Hz"
+    by_text = {c["text"]: c for c in calls}
+    assert set(by_text) == {"А как дела?", "Дальше."}
+    assert by_text["А как дела?"]["pitch"] == "+8Hz"
+    assert by_text["Дальше."]["pitch"] == "+0Hz"
     a, b, c = track.phrases
     assert b.start == pytest.approx(a.start + a.duration, abs=0.03)
     assert c.start >= b.start + b.duration + VOICEOVER_GAP - 0.02

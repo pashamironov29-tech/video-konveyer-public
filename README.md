@@ -34,16 +34,32 @@ The interface language does not change what the pipeline produces: translation a
 
 ## Requirements
 
-- Windows 10/11 (primary target; Linux/macOS mostly work, but default fonts point to `C:/Windows/Fonts` — change `[render] font_title/font_text`)
+- Windows 10/11, Linux (including Steam Deck) and macOS. Paths go through `pathlib`. `ffmpeg`, `ffprobe` and `yt-dlp` are found on `PATH` — nothing is hardcoded as `.exe`.
 - Python 3.12+ (`tomllib` is required)
 - `ffmpeg` and `ffprobe` in PATH
-- `yt-dlp` (installed from requirements) and **Deno** for YouTube (`winget install DenoLand.Deno`)
+- `yt-dlp` (installed from requirements) and **Deno** for YouTube (Windows: `winget install DenoLand.Deno`; Linux: the Deno install script, see below)
 - Optional: NVIDIA GPU + CUDA PyTorch, DeepSeek API key, Telegram bot, Hugging Face token (diarization), Ollama (frame check)
 
 ## Install
 
+ffmpeg and Deno (Windows):
+
 ```bat
-git clone <this repo> video-konveyer
+winget install Gyan.FFmpeg
+winget install DenoLand.Deno
+```
+
+Linux (Debian/Ubuntu):
+
+```bash
+sudo apt install ffmpeg python3-venv
+curl -fsSL https://deno.land/install.sh | sh
+```
+
+The project:
+
+```bat
+git clone https://github.com/pashamironov29-tech/video-konveyer-public.git video-konveyer
 cd video-konveyer
 py -m pip install -r requirements.txt
 copy konveyer.toml.example konveyer.toml
@@ -51,13 +67,64 @@ copy .env.example .env
 py -m konveyer doctor
 ```
 
-`INSTALL.bat` does the pip install + `doctor` step. Optional extras:
+On Linux use `python3` instead of `py` and `cp` instead of `copy`. The full Linux and Steam Deck steps are in
+[Running on Linux](#running-on-linux--запуск-на-linux). Run every command from the repository folder:
+the `konveyer` package is not pip-installed, `python -m konveyer` finds it in the current folder.
+
+`INSTALL.bat` installs the requirements, copies the config templates (if missing) and runs `doctor`. Optional extras:
 
 ```bat
+py -m pip install -r requirements-optional.txt                              :: mediapipe for layout = "smart"
 py -m pip install torch --index-url https://download.pytorch.org/whl/cu128   :: GPU Whisper / Silero
 py -m pip install pyannote.audio                                            :: speaker diarization (needs HF_TOKEN)
 py -m pip install demucs                                                    :: --separate
 ```
+
+## Voiceover
+
+`[voice] engine` in `konveyer.toml`; turn it on with `--voice` or `[voice] enabled = true`.
+
+- **edge** (default) — Edge TTS, needs internet, installed from requirements.
+- **silero** — offline: needs PyTorch and the `v4_ru.pt` model in `models/silero/` (or `[voice] model_path`).
+- **xtts** — XTTS v2 voice clone from `[voice] sample` (10–30 s, only with the speaker's consent).
+  coqui-tts does not install on recent Python versions, so give it a separate Python 3.12 environment:
+
+```bash
+python3 -m venv xtts-venv
+```
+
+Then install coqui-tts into that environment and point `[voice] xtts_python` at its interpreter
+(Linux: `xtts-venv/bin/python`, Windows: `xtts-venv/Scripts/python.exe`). On first use the model (~2 GB)
+is downloaded from Hugging Face. `python -m konveyer doctor` shows whether XTTS is usable.
+
+## What goes over the network
+
+The pipeline runs on your machine, but some steps call external services:
+
+| Service | What is sent | When |
+|---|---|---|
+| Source site (via yt-dlp) | the link, your cookies if configured | downloading a link |
+| DeepSeek (`api.deepseek.com`) | transcript text, video title | translation, moments, titles, post — if `DEEPSEEK_API_KEY` is set |
+| Microsoft Edge TTS | voiceover text | `engine = "edge"` |
+| Pollinations (`image.pollinations.ai`) | a short image prompt | `[cover] mode = "ai"` or `"both"` |
+| Telegram (`api.telegram.org`) | finished clips, covers, post | `send` / auto-send |
+| Hugging Face | downloads Whisper, XTTS, pyannote models (with `HF_TOKEN`) | first run |
+| GitHub | the Russo One font if missing from `assets/fonts` | covers |
+| Ollama | clip frames | local `[quality] ollama_url` only |
+
+Offline: use a local file instead of a link, no `DEEPSEEK_API_KEY` (heuristic moments, no translation),
+`engine = "silero"`, `[cover] mode = "frame"`, no `send`. Download Whisper models in advance.
+
+## Security
+
+- The web UI has no password and listens on this machine only: `[web] host` must be `127.0.0.1`, `localhost`
+  or `::1`, other values are rejected. Requests with a foreign `Host` header are refused (DNS rebinding protection).
+- The web UI accepts a link or a video file; other files are rejected.
+- A local file is copied into the job folder. To save space on big files set `[ingest] link_local = true`
+  (a hard link on the same drive; note that editing the job's copy then changes the original too).
+- Do not run the web UI and the CLI on the same job at the same time: `job.json` is written atomically,
+  but changes from two processes are not merged — the last write wins.
+- Reporting vulnerabilities: see [SECURITY.md](SECURITY.md).
 
 ## Your keys, cookies and paths
 
@@ -69,7 +136,7 @@ Nothing secret lives in the code or in the config. Put your own values here (all
 | YouTube / Instagram / X cookies | `cookies/youtube_cookies.txt` + `[ingest] cookies_file = "cookies/youtube_cookies.txt"`, or `[ingest] cookies_from_browser = "firefox"` |
 | Settings | `konveyer.toml` (copy of `konveyer.toml.example`) |
 | Silero model `v4_ru.pt` | `models/silero/v4_ru.pt` or `[voice] model_path` |
-| XTTS python | `[voice] xtts_python = "xtts-venv/Scripts/python.exe"` |
+| XTTS python | `[voice] xtts_python`: Linux `xtts-venv/bin/python`, Windows `xtts-venv/Scripts/python.exe` |
 | Your post prompt / example | `prompts/post_prompt.md`, `prompts/post_example.md` (`[post] style_files`) |
 | Your own `subs.py` translator prompt | `[paths] subs_dir` |
 | Channel name used in posts | `[post] group`, `hashtags` |
@@ -94,7 +161,60 @@ py -m konveyer --lang en --help                       :: all commands and flags
 
 Or double-click `RUN.bat` (asks for a link) / `WEB.bat`. Results are in `jobs/<id>/`.
 
-Tests: `py -m pytest -q`.
+Tests:
+
+```bat
+py -m pip install -r requirements-dev.txt
+py -m ruff check .
+py -m pytest -q
+```
+
+## Running on Linux / Запуск на Linux
+
+The same commands work on Linux. Tools are looked up on `PATH` (`ffmpeg`, `ffprobe`, `yt-dlp`, `deno`); paths inside the project are `pathlib` paths, relative to the repository folder.
+
+Debian / Ubuntu:
+
+```bash
+sudo apt install ffmpeg python3-venv
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+cp konveyer.toml.example konveyer.toml
+cp .env.example .env
+python -m konveyer doctor
+```
+
+YouTube needs Deno on `PATH`:
+
+```bash
+curl -fsSL https://deno.land/install.sh | sh
+```
+
+Open a new shell so `~/.deno/bin` is on `PATH`, then run `python -m konveyer doctor` again.
+
+Steam Deck (Desktop Mode): SteamOS keeps the root filesystem read-only, so install into a distrobox instead of the system:
+
+```bash
+distrobox create -n konveyer -i ubuntu:24.04
+distrobox enter konveyer
+sudo apt install ffmpeg python3-venv
+```
+
+Inside the container, follow the Ubuntu steps above. `doctor` should show `ffmpeg`, `ffprobe` and `yt-dlp` as found. Overlay text uses a system font if one is installed (DejaVu, Liberation or Noto on SteamOS — usually under `/usr/share/fonts`) and otherwise `assets/fonts` (Russo One). To pick a face, set `[render] font_title` and `[render] font_text` to a `.ttf` path.
+
+## How this was built and tested / Как это сделано и протестировано
+
+- I am learning Python. Most of this code was written with help from AI.
+- I use this pipeline every day.
+- It keeps running stably for several days in a row.
+- Tests and CI run on every push: GitHub Actions runs ruff and pytest on Ubuntu and Windows.
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m ruff check .
+python -m pytest -q
+```
 
 ## Legal
 

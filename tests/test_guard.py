@@ -5,7 +5,6 @@ import shutil
 from types import SimpleNamespace
 
 import numpy as np
-import pytest
 
 from conftest import FAKE_KEY, FakeLLM, FakeSession, FakeTranscriber, needs_ffmpeg
 from konveyer import cli, hardware
@@ -360,7 +359,7 @@ def test_doctor_mentions_deno(capsys, tmp_path, monkeypatch):
     code = cli.main(["--set", f"paths.jobs_dir={tmp_path / 'jobs'}", "doctor"])
     out = capsys.readouterr().out
     assert code == 0
-    assert "winget install DenoLand.Deno" in out
+    assert "winget install DenoLand.Deno" in out and "deno.land" in out
     assert BLUR_FALLBACK  # строка жива и не пустая
 
 

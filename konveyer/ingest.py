@@ -80,14 +80,19 @@ def download(url: str, job: Job, settings: Settings, log: Log) -> tuple[Path, di
     return video, meta_from_info(info)
 
 
-def take_local(path: str, job: Job) -> tuple[Path, dict]:
+def take_local(path: str, job: Job, link: bool = False) -> tuple[Path, dict]:
     src = Path(path.strip('"')).expanduser()
     if not src.is_file():
         raise KonveyerError(f"файл не найден: {src}")
     dst = job.dir / f"source{src.suffix.lower() or '.mp4'}"
-    try:
-        os.link(src, dst)                 # жёсткая ссылка: мгновенно и без копии на диске
-    except OSError:
+    linked = False
+    if link:
+        try:
+            os.link(src, dst)             # тот же файл на диске: мгновенно, но правка тронет оригинал
+            linked = True
+        except OSError:
+            pass
+    if not linked:
         shutil.copy2(src, dst)
     return dst, {"title": src.stem, "uploader": "", "description": "", "url": "",
                  "site": "local", "upload_date": "", "tags": []}
@@ -99,8 +104,13 @@ def ingest(job: Job, settings: Settings, log: Log) -> None:
         video, meta = download(source, job, settings, log)
     else:
         log.info("беру локальный файл")
-        video, meta = take_local(source, job)
-    probe = ffprobe(video)
+        video, meta = take_local(source, job, settings.ingest.link_local)
+    try:
+        probe = ffprobe(video)
+    except KonveyerError:
+        # не видео — не держим чужой файл в папке задания (её отдаёт веб-интерфейс)
+        video.unlink(missing_ok=True)
+        raise
     if probe["duration"] <= 0:
         raise KonveyerError("не удалось узнать длительность видео — файл битый?")
     meta.update(probe, file=video.name)
