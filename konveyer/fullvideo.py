@@ -24,7 +24,7 @@ from konveyer.render import clip_words
 from konveyer.speech import NO_SPEECH_MATERIAL, SKIP_CAPTIONS
 from konveyer.transcript import Transcript
 from konveyer.translate import translate_texts
-from konveyer.util import (KonveyerError, ffmpeg_filter_path, ffprobe, fmt_time, mask,
+from konveyer.util import (KonveyerError, ffmpeg_filter_path, ffprobe, filter_complex_args, fmt_time, mask,
                            need_tool, read_json, run, write_json)
 from konveyer.voice import VoiceOver, align_cues_to_voice, duck_expr, separate_music, voice_gate
 
@@ -274,7 +274,7 @@ def _encode(src: Path, start: float, dur: float, graph: str, has_a: bool, out: P
                 "-ss", f"{start:.3f}", "-t", f"{dur:.3f}", "-i", str(src.resolve())]
         for name in extra:
             line += ["-i", name]
-        line += ["-filter_complex", graph, "-map", "[v]"]
+        line += [*filter_complex_args(graph), "-map", "[v]"]
         if has_a:
             line += ["-map", "[a]", "-c:a", "aac", "-b:a", "192k"]
         line += [*encoder.args, "-r", str(fps), "-movflags", "+faststart", out.name]

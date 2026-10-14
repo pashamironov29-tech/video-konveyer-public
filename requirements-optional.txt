@@ -1,0 +1,2 @@
+# Optional / по желанию: py -m pip install -r requirements-optional.txt
+mediapipe>=0.10      # layout = "smart": face tracking / слежение за лицом

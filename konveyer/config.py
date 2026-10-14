@@ -28,6 +28,7 @@ class IngestCfg:
     max_height: int = 1080                       # для вертикали 1080x1920 больше не нужно
     cookies_from_browser: str = ""               # "firefox" / "chrome" — для Instagram и X
     cookies_file: str = ""                       # cookies.txt (Netscape) для yt-dlp, напр. cookies/youtube_cookies.txt
+    link_local: bool = False                     # True — жёсткая ссылка на локальный файл вместо копии
 
 
 @dataclass
@@ -90,8 +91,8 @@ class RenderCfg:
     encoder: str = "auto"                        # auto | h264_nvenc | h264_qsv | h264_amf | libx264
     crf: int = 20
     preset: str = "medium"
-    font_title: str = "C:/Windows/Fonts/ariblk.ttf"
-    font_text: str = "C:/Windows/Fonts/arialbd.ttf"
+    font_title: str = ""                         # пусто — системный шрифт, затем assets/fonts
+    font_text: str = ""
     blur_sigma: float = 6.0
     cover: bool = True
     zoom: float = 1.0                        # 1.0 — кадр 16:9 целиком (по умолчанию), 1.5 — старый зум: крупнее, бока обрезаны
@@ -246,7 +247,7 @@ class VoiceCfg:
     separate: bool = False                       # demucs: убрать голос, оставить музыку и шумы
     demucs_model: str = "htdemucs"
     sample: str = ""                             # xtts: чистая запись голоса 10–30 с (wav)
-    xtts_python: str = ""                        # python.exe отдельного venv с XTTS; "" — текущий
+    xtts_python: str = ""                        # python отдельного venv с XTTS; "" — текущий
     xtts_model: str = "tts_models/multilingual/multi-dataset/xtts_v2"
     xtts_timeout: float = 1800.0
     edge_rate: str = "+0%"                       # базовый темп Edge, к нему прибавляется интонация
@@ -351,8 +352,11 @@ class TelegramCfg:
 
 @dataclass
 class WebCfg:
-    host: str = "127.0.0.1"
+    host: str = "127.0.0.1"         # только loopback: у интерфейса нет пароля
     port: int = 8765
+
+
+WEB_HOSTS = ("127.0.0.1", "localhost", "::1")
 
 
 COVER_MODES = ("frame", "ai", "both")
@@ -519,7 +523,7 @@ def load_settings(path: Path | None = None, overrides: dict | None = None,
         path = Path(env) if env else settings.root / "konveyer.toml"
     if path.exists():
         try:
-            data = tomllib.loads(path.read_text(encoding="utf-8"))
+            data = tomllib.loads(path.read_text(encoding="utf-8-sig"))   # Блокнот/PowerShell пишут BOM
         except tomllib.TOMLDecodeError as e:
             raise KonveyerError(f"ошибка в {path.name}: {e}") from e
         for section, values in data.items():
@@ -530,7 +534,7 @@ def load_settings(path: Path | None = None, overrides: dict | None = None,
     extra = settings.root / "pronunciations.toml"
     if extra.is_file():
         try:
-            words = tomllib.loads(extra.read_text(encoding="utf-8"))
+            words = tomllib.loads(extra.read_text(encoding="utf-8-sig"))
         except tomllib.TOMLDecodeError as e:
             raise KonveyerError(f"ошибка в {extra.name}: {e}") from e
         words = words.get("pronounce", words) if isinstance(words.get("pronounce"), dict) else words
@@ -561,6 +565,11 @@ def _resolve_paths(s: Settings) -> None:
 def _validate(s: Settings) -> None:
     if s.ui.lang not in ("ru", "en"):
         raise KonveyerError("ui.lang: ru или en")
+    if str(s.web.host).strip().lower() not in WEB_HOSTS:
+        raise KonveyerError("web.host: только 127.0.0.1, localhost или ::1 — "
+                            "у веб-интерфейса нет пароля, наружу его открывать нельзя")
+    if not 0 <= int(s.web.port) <= 65535:
+        raise KonveyerError("web.port от 0 до 65535")
     if s.cleanup.keep_days < 0:
         raise KonveyerError("cleanup.keep_days: 0 или больше (0 — старые задания не удалять)")
     if s.render.layout not in ("auto", "blur", "full", "smart"):

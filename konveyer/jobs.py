@@ -55,12 +55,16 @@ class Job:
                label: str = "") -> "Job":
         stamp = time.strftime("%Y%m%d-%H%M%S")
         base = f"{stamp}_{slugify(label or label_from_source(source), 32)}"
+        settings.jobs_dir.mkdir(parents=True, exist_ok=True)
         folder = settings.jobs_dir / base
         n = 2
-        while folder.exists():
-            folder = settings.jobs_dir / f"{base}-{n}"
-            n += 1
-        folder.mkdir(parents=True)
+        while True:
+            try:
+                folder.mkdir()          # без exist_ok: два запуска в ту же секунду не возьмут одну папку
+                break
+            except FileExistsError:
+                folder = settings.jobs_dir / f"{base}-{n}"
+                n += 1
         job = cls(folder, {
             "id": folder.name, "source": source, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
             "options": dict(options or {}), "state": "new", "current": "", "error": "",

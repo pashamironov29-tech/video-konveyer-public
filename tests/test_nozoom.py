@@ -30,7 +30,6 @@ def test_old_zoom_still_available():
 
 def test_zoom_center_flag_reaches_settings():
     from konveyer import cli
-    from konveyer.jobs import Job
     from konveyer.pipeline import settings_for_job
 
     a = cli.build_parser().parse_args(["clip", "u", "0:00-0:30", "--zoom", "1.3", "--zoom-center"])

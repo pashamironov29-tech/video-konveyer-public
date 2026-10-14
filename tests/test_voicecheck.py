@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import json
 
-import pytest
-
 from konveyer import cli
 from konveyer.jobs import Job
 from konveyer.log import Log
@@ -253,7 +251,10 @@ def _wav(path, seconds, cut_at=None, rate=16000):
         env[tt >= cut_at] = 0.0
     x = (0.3 * np.sin(2 * np.pi * 220 * tt) * env * 32767).astype("<i2")
     with wave.open(str(path), "wb") as w:
-        w.setnchannels(1); w.setsampwidth(2); w.setframerate(rate); w.writeframes(x.tobytes())
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(x.tobytes())
 
 
 class _CutLLM:

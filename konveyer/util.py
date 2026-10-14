@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from konveyer.envkeys import mask
@@ -96,9 +97,38 @@ def slugify(text: str, max_len: int = 40) -> str:
     return (text[:max_len].rstrip("-")) or "video"
 
 
+FILTER_INLINE_MAX = 6000      # длиннее — граф из файла: на Windows командная строка до ~32 КБ
+_script_flag: str | None = None
+
+
+def ffmpeg_script_flag() -> str:
+    """Как передать граф файлом: ffmpeg 7+ — «-/filter_complex», старые — «-filter_complex_script»."""
+    global _script_flag
+    if _script_flag is None:
+        try:
+            out = subprocess.run([need_tool("ffmpeg"), "-hide_banner", "-version"],
+                                 capture_output=True, text=True, timeout=20).stdout
+        except (OSError, subprocess.TimeoutExpired, KonveyerError):
+            out = ""
+        m = re.search(r"ffmpeg version n?(\d+)\.", out)
+        # ночные сборки («N-12345-…») номера версии не пишут, а они новее 7.0
+        old = bool(m) and int(m.group(1)) < 7
+        _script_flag = "-filter_complex_script" if old else "-/filter_complex"
+    return _script_flag
+
+
+def filter_complex_args(graph: str, script: str = "filter.txt") -> list[str]:
+    """Аргументы для графа. Короткий — строкой, длинный — из файла script
+    (его пишет вызывающий в рабочую папку ffmpeg)."""
+    if len(graph) <= FILTER_INLINE_MAX:
+        return ["-filter_complex", graph]
+    return [ffmpeg_script_flag(), script]
+
+
 def ffmpeg_filter_path(path: Path | str) -> str:
-    """Путь для аргумента фильтра ffmpeg: прямые слэши и экранированное двоеточие."""
-    return str(path).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
+    """Путь для аргумента фильтра ffmpeg внутри одинарных кавычек ('...'): прямые слэши,
+    экранированное двоеточие, апостроф закрывает кавычку и экранируется на обоих уровнях разбора."""
+    return str(path).replace("\\", "/").replace(":", r"\:").replace("'", r"'\\\''")
 
 
 def write_json(path: Path, data) -> None:
@@ -108,17 +138,30 @@ def write_json(path: Path, data) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(tmp, path)
+        for attempt in range(20):
+            try:
+                os.replace(tmp, path)
+                break
+            except PermissionError:
+                # Windows: замена не проходит, пока другой поток/процесс читает файл
+                if attempt == 19:
+                    raise
+                time.sleep(0.05)
     except BaseException:
         Path(tmp).unlink(missing_ok=True)
         raise
 
 
 def read_json(path: Path, default=None):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        return default
+    for attempt in range(20):
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return default
+        except PermissionError:
+            if attempt == 19:            # Windows: файл как раз заменяет write_json
+                raise
+            time.sleep(0.05)
 
 
 def is_url(s: str) -> bool:

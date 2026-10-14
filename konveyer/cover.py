@@ -18,6 +18,7 @@ import numpy as np
 
 from konveyer.config import Settings
 from konveyer.facetrack import FaceFinder
+from konveyer.layout import font_candidates
 from konveyer.jobs import Job
 from konveyer.log import Log
 from konveyer.mediaq import face_cut, is_black
@@ -95,10 +96,8 @@ def resolve_font(settings: Settings, log: Log | None = None, fetch=None) -> Path
             log.info(f"скачал шрифт обложки: {bundled.name}")
         return bundled
     except Exception as e:
-        for cand in ("C:/Windows/Fonts/ariblk.ttf", "C:/Windows/Fonts/arialbd.ttf",
-                     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                     "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"):
-            if Path(cand).is_file():
+        for cand in font_candidates():
+            if cand.is_file():
                 if log:
                     log.warn(f"Russo One нет ({e}), рисую {Path(cand).name}")
                 return Path(cand)

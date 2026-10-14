@@ -13,7 +13,8 @@
 Готовые шаги пропускаются; `redo --from <шаг>` сбрасывает шаг и всё после него.
 Задание = папка `jobs/<id>/` + состояние в `job.json` + журнал `job.log`.
 
-1. **ingest** — yt-dlp (до `[ingest] max_height`) или локальный файл (жёсткая ссылка), метаданные автора.
+1. **ingest** — yt-dlp (до `[ingest] max_height`) или локальный файл (копия; жёсткая ссылка — `[ingest] link_local`),
+   метаданные автора. Файл, который ffprobe не открыл, удаляется из задания.
 2. **transcribe** — faster-whisper с таймингом слов; CUDA → CPU при ошибке; оценка надёжности речи (`[speech]`).
 3. **analyze** — громкость RMS, склейки (`select=scene`), плотность речи.
 4. **moments** — DeepSeek выбирает куски; без ключа — эвристика; границы к словам/склейкам.
@@ -43,7 +44,7 @@
 | `voice.py`, `saytext.py`, `voicecheck.py`, `xtts_worker.py`, `speakers.py` | озвучка Edge/Silero/XTTS, текст для синтеза, проверка, диаризация |
 | `cover.py`, `post.py`, `postfmt.py`, `clipdesc.py`, `quality.py`, `mediaq.py` | обложки, посты, проверки перед отправкой |
 | `telegram.py`, `cleanup.py`, `fullvideo.py`, `guard.py` | отправка, автоочистка, целое видео, сторож |
-| `web/server.py`, `web/static/index.html` | веб-интерфейс и API (POST требует заголовок `X-Konveyer: 1`) |
+| `web/server.py`, `web/static/index.html` | веб-интерфейс и API (POST требует `X-Konveyer: 1`, любой запрос — loopback `Host`) |
 
 ## Команды
 
@@ -80,9 +81,10 @@ guard <id>   web [--port] [--no-open]   doctor   config   cleanup [--dry-run]
 ## Тесты
 
 ```
-py -m pip install -r requirements.txt   # + httpx (идёт с openai)
+py -m pip install -r requirements-dev.txt   # requirements.txt + pytest
 py -m pytest -q
 ```
+Необязательные пакеты (`mediapipe`) — в `requirements-optional.txt`; тесты без них проходят. CI — `.github/workflows/tests.yml`.
 Внешние сервисы (Whisper, DeepSeek, Edge, Silero, Ollama, Telegram, сеть) в тестах подменены; часть тестов требует ffmpeg
 (`@needs_ffmpeg`). Около 470 тестов; `test_i18n.py` и `test_smoke.py` — проверки импорта, i18n и примеров конфигов.
 
@@ -102,8 +104,15 @@ py -m pytest -q
   нет шрифта — предупреждение и клип без надписей, не падение. Обложки — `cover.resolve_font`.
 - Числа из веб-API — только через `web.server.num_param` (диапазон, без nan/inf, целые — целые).
 - Списки голосов сравниваются без учёта регистра (`casefold`), дубли убираются.
-- Сеть в вебе — только 127.0.0.1; Telegram — только отправка.
-- Основная платформа — Windows (`py`, `.bat`, шрифты `C:/Windows/Fonts` по умолчанию).
+- Веб — только loopback: `[web] host` проверяется в `_validate`, заголовок `Host` — в каждом запросе
+  (`server.allowed_host`); через веб принимаются только ссылки и видеофайлы (`server.check_source`). Telegram — только отправка.
+- Одно задание — один процесс: `job.json` пишется атомарно (`util.write_json`), но веб и CLI на одном задании
+  одновременно не согласуются — последняя запись побеждает. Внутри веба задание в очереди/работе даёт 409 (`Busy`).
+- Длинный граф ffmpeg — через `util.filter_complex_args` (файлом, иначе упрёмся в ~32 КБ командной строки Windows).
+- Пути внутри фильтров ffmpeg — `util.ffmpeg_filter_path` в одинарных кавычках.
+- Пути — `pathlib`. `ffmpeg`, `ffprobe`, `yt-dlp`, `deno` ищутся в PATH (`util.need_tool` / `shutil.which`), без зашитых `.exe`.
+  Шрифты: конфиг → системные (Windows через `%WINDIR%`, Linux/SteamOS — `/usr/share/fonts`) → `assets/fonts`.
+  `.bat` — только удобный запуск на Windows; на Linux команды из README.
 
 ## Правила репозитория
 

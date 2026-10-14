@@ -94,16 +94,16 @@ def test_build_ass_karaoke():
     ass = build_ass(make_cues(ws), 1080, 1920, size=74, align=8, margin_v=900, karaoke=True)
     assert "PlayResX: 1080" in ass and "PlayResY: 1920" in ass
     assert ",8,60,60,900,1" in ass
-    events = [l for l in ass.splitlines() if l.startswith("Dialogue:")]
+    events = [line for line in ass.splitlines() if line.startswith("Dialogue:")]
     assert len(events) == 3
-    assert all(l.count(YELLOW_TAG) == 1 for l in events)
+    assert all(line.count(YELLOW_TAG) == 1 for line in events)
     assert f"{YELLOW_TAG}два" in events[1]
 
 
 def test_build_ass_plain_and_upper():
     cues = [Cue(0, 2, "переведённая {реплика}")]
     ass = build_ass(cues, 1080, 1920, karaoke=True, upper=True)
-    line = [l for l in ass.splitlines() if l.startswith("Dialogue:")][0]
+    line = [row for row in ass.splitlines() if row.startswith("Dialogue:")][0]
     assert YELLOW_TAG not in line and "ПЕРЕВЕДЁННАЯ (РЕПЛИКА)" in line.replace("\\N", " ")
     assert build_ass([], 1080, 1920).rstrip().endswith("Text")
 
