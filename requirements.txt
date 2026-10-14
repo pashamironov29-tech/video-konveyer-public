@@ -4,5 +4,5 @@ numpy>=1.26
 pillow>=10
 num2words>=0.5.14
 edge-tts>=6.1.9
-openai>=1.40
+openai>=1.40,<2
 requests>=2.31
