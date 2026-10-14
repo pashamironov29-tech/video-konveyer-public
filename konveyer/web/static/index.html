@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Видео-конвейер</title>
+<style>
+  :root { --bg:#0f1115; --panel:#181b22; --line:#2a2f3a; --text:#e8eaf0; --dim:#8b93a5;
+          --acc:#ffd23f; --ok:#4ade80; --bad:#f87171; --run:#60a5fa; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.45 "Segoe UI",Arial,sans-serif; }
+  header { padding:12px 20px; border-bottom:1px solid var(--line); display:flex; gap:16px; align-items:center; }
+  header h1 { font-size:18px; margin:0; } header h1 b { color:var(--acc); }
+  #status { color:var(--dim); font-size:13px; margin-left:auto; }
+  main { display:grid; grid-template-columns:340px 1fr; min-height:calc(100vh - 50px); }
+  aside { border-right:1px solid var(--line); padding:16px; overflow:auto; }
+  section#detail { padding:16px 22px; overflow:auto; }
+  .box { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; margin-bottom:14px; }
+  label { display:block; color:var(--dim); font-size:12px; margin:8px 0 3px; }
+  input, select, textarea { width:100%; background:#0c0e12; color:var(--text); border:1px solid var(--line);
+          border-radius:7px; padding:7px 9px; font:inherit; }
+  textarea { resize:vertical; }
+  .row { display:flex; gap:8px; } .row > * { flex:1; }
+  .checks label { display:flex; gap:6px; align-items:center; color:var(--text); font-size:13px; margin:5px 0; }
+  .checks input { width:auto; }
+  button { background:var(--acc); color:#111; border:0; border-radius:7px; padding:8px 14px; font-weight:600;
+           cursor:pointer; font:inherit; font-weight:600; }
+  button.ghost { background:transparent; color:var(--text); border:1px solid var(--line); font-weight:400; }
+  button:disabled { opacity:.45; cursor:default; }
+  .job { padding:9px 10px; border-radius:8px; cursor:pointer; border:1px solid transparent; margin-bottom:4px; }
+  .job:hover { background:var(--panel); } .job.sel { border-color:var(--acc); background:var(--panel); }
+  .job .t { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .job .m { color:var(--dim); font-size:12px; }
+  .st-done{color:var(--ok)} .st-failed{color:var(--bad)} .st-running,.st-queued{color:var(--run)}
+  .st-review{color:var(--acc)}
+  .note { color:var(--acc); margin-top:6px; }
+  .steps { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+  .steps span { padding:3px 9px; border-radius:20px; border:1px solid var(--line); font-size:12px; color:var(--dim); }
+  .steps span.done { border-color:var(--ok); color:var(--ok); }
+  .steps span.failed { border-color:var(--bad); color:var(--bad); }
+  .steps span.cur { border-color:var(--run); color:var(--run); }
+  .clips { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; }
+  .clip video, .clip img.poster { width:100%; aspect-ratio:9/16; background:#000; border-radius:8px; object-fit:contain; }
+  .covers { display:flex; gap:8px; margin-top:8px; }
+  .covers figure { margin:0; flex:1; min-width:0; }
+  .covers img { width:100%; height:auto; max-height:220px; object-fit:contain; background:#000; border-radius:8px; }
+  .covers figcaption { color:var(--dim); font-size:12px; margin-top:3px; }
+  .clip h3 { margin:0 0 6px; font-size:14px; } .clip .why { color:var(--dim); font-size:12px; min-height:2em; }
+  .err { color:var(--bad); white-space:pre-wrap; }
+  pre.log { background:#0b0d10; border:1px solid var(--line); border-radius:8px; padding:10px; max-height:320px;
+            overflow:auto; font:12px/1.4 Consolas,monospace; color:#b8c0d0; white-space:pre-wrap; }
+  .actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .muted { color:var(--dim); } a { color:var(--acc); }
+  #toast { position:fixed; right:18px; bottom:18px; background:var(--panel); border:1px solid var(--line);
+           padding:10px 14px; border-radius:8px; display:none; max-width:420px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Видео-<b>конвейер</b></h1>
+  <span class="muted">ссылка → клипы 9:16 или целое видео 16:9 → пост ВК → Telegram</span>
+  <span id="status"></span>
+  <select id="lang" title="Язык / Language" style="width:auto"><option value="ru">RU</option><option value="en">EN</option></select>
+</header>
+<main>
+  <aside>
+    <div class="box">
+      <label>Ссылка или путь к файлу</label>
+      <input id="src" placeholder="https://youtu.be/... или C:\видео\ролик.mp4">
+      <label><input type="checkbox" id="full"> целое видео 16:9 для ВК (без нарезки)</label>
+      <div class="row">
+        <div><label>Отрезок с</label><input id="full_from" placeholder="0:00"></div>
+        <div><label>по</label><input id="full_to" placeholder="конец"></div>
+      </div>
+      <div class="row">
+        <div><label>Клипов</label><input id="count" type="number" min="1" max="10" value="3"></div>
+        <div><label>Мин, с</label><input id="min" type="number" min="3" value="15"></div>
+        <div><label>Макс, с</label><input id="max" type="number" min="5" value="60"></div>
+      </div>
+      <label>Раскладка</label>
+      <select id="layout">
+        <option value="auto">авто (вертикаль — на весь экран, иначе размытый фон)</option>
+        <option value="blur">размытый фон + заголовок сверху</option>
+        <option value="full">на весь экран (обрезка по центру)</option>
+        <option value="smart">на весь экран, следить за лицом</option>
+      </select>
+      <label>Зум картинки <b id="zoomVal">1.0</b></label>
+      <input id="zoom" type="range" min="1" max="2" step="0.1" value="1">
+      <label>Обложка</label>
+      <select id="cover_mode">
+        <option value="both">кадр и нейросеть</option>
+        <option value="frame">кадр из видео</option>
+        <option value="ai">нейросеть, если не выйдет — кадр</option>
+      </select>
+      <label>Субтитры</label>
+      <select id="subs_style">
+        <option value="normal">обычные</option>
+        <option value="big">крупные, по 1–2 слова</option>
+      </select>
+      <label>Голос озвучки</label>
+      <select id="voice_speaker">
+        <option value="brian">brian — мужской, многоязычный</option>
+        <option value="dmitry">dmitry — мужской</option>
+        <option value="svetlana">svetlana — женский</option>
+        <option value="ava">ava — женский, многоязычный</option>
+        <option value="emma">emma — женский, многоязычный</option>
+        <option value="florian">florian — мужской, немецкий</option>
+        <option value="seraphina">seraphina — женский, немецкий</option>
+      </select>
+      <div class="checks">
+        <label><input type="checkbox" id="tighten"> вырезать паузы в речи</label>
+        <label><input type="checkbox" id="no_translate"> не переводить субтитры</label>
+        <label><input type="checkbox" id="no_captions"> без субтитров</label>
+        <label><input type="checkbox" id="no_titles"> без надписей</label>
+        <label><input type="checkbox" id="force_captions"> субтитры даже если речи нет</label>
+        <label><input type="checkbox" id="voice"> Русская озвучка</label>
+        <label><input type="checkbox" id="voice_no_subs"> с озвучкой — без субтитров</label>
+        <label><input type="checkbox" id="separate"> с озвучкой — убрать голос оригинала (demucs)</label>
+        <label><input type="checkbox" id="no_speakers"> один стиль субтитров</label>
+        <label><input type="checkbox" id="one_voice"> одним голосом на всех</label>
+        <label><input type="checkbox" id="no_llm"> без DeepSeek</label>
+        <label><input type="checkbox" id="score"> оценка момента DeepSeek</label>
+        <label><input type="checkbox" id="vision_check"> проверка кадров через Ollama</label>
+        <label><input type="checkbox" id="no_cover"> без обложки</label>
+        <label><input type="checkbox" id="tg"> в конце отправить в Telegram</label>
+      </div>
+      <div class="actions"><button id="go">Поехали</button></div>
+    </div>
+    <div id="jobs"></div>
+  </aside>
+  <section id="detail"><p class="muted">Вставь ссылку слева или выбери задание.</p></section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const STEP_RU_SRC = {ingest:"скачивание", transcribe:"распознавание", analyze:"анализ",
+                 moments:"моменты", render:"рендер", cover:"обложка", post:"пост", send:"отправка"};
+const STATE_RU_SRC = {done:"готово", failed:"ошибка", running:"идёт", queued:"в очереди", new:"новое",
+                  review:"на проверку"};
+
+// ---------- i18n: Russian is the source, English is looked up here
+const EN = {
+  "Видео-конвейер":"Video pipeline", "Видео-":"Video ", "конвейер":"pipeline",
+  "ссылка → клипы 9:16 или целое видео 16:9 → пост ВК → Telegram":"link → 9:16 clips or full 16:9 video → VK post → Telegram",
+  "Ссылка или путь к файлу":"URL or file path", "https://youtu.be/... или C:\\видео\\ролик.mp4":"https://youtu.be/... or videos/clip.mp4",
+  "целое видео 16:9 для ВК (без нарезки)":"full 16:9 video for VK (no cutting)", "Отрезок с":"Segment from", "по":"to",
+  "конец":"end", "Клипов":"Clips", "Мин, с":"Min, s", "Макс, с":"Max, s", "Раскладка":"Layout",
+  "авто (вертикаль — на весь экран, иначе размытый фон)":"auto (vertical — full screen, otherwise blurred background)",
+  "размытый фон + заголовок сверху":"blurred background + title on top", "на весь экран (обрезка по центру)":"full screen (center crop)",
+  "на весь экран, следить за лицом":"full screen, follow the face", "Зум картинки":"Picture zoom", "Обложка":"Cover",
+  "кадр и нейросеть":"frame and AI", "кадр из видео":"video frame", "нейросеть, если не выйдет — кадр":"AI, fallback to frame",
+  "Субтитры":"Subtitles", "обычные":"normal", "крупные, по 1–2 слова":"large, 1–2 words", "Голос озвучки":"Voiceover voice",
+  "brian — мужской, многоязычный":"brian — male, multilingual", "dmitry — мужской":"dmitry — male",
+  "svetlana — женский":"svetlana — female", "ava — женский, многоязычный":"ava — female, multilingual",
+  "emma — женский, многоязычный":"emma — female, multilingual", "florian — мужской, немецкий":"florian — male, German",
+  "seraphina — женский, немецкий":"seraphina — female, German",
+  "вырезать паузы в речи":"cut pauses in speech", "не переводить субтитры":"do not translate subtitles",
+  "без субтитров":"no subtitles", "без надписей":"no overlays", "субтитры даже если речи нет":"subtitles even without speech",
+  "Русская озвучка":"Russian voiceover", "с озвучкой — без субтитров":"with voiceover — no subtitles",
+  "с озвучкой — убрать голос оригинала (demucs)":"with voiceover — remove original voice (demucs)",
+  "один стиль субтитров":"single subtitle style", "одним голосом на всех":"one voice for everyone",
+  "без DeepSeek":"no DeepSeek", "оценка момента DeepSeek":"DeepSeek moment scoring", "проверка кадров через Ollama":"frame check via Ollama",
+  "без обложки":"no cover", "в конце отправить в Telegram":"send to Telegram at the end", "Поехали":"Go",
+  "Вставь ссылку слева или выбери задание.":"Paste a link on the left or pick a job.", "Заданий пока нет.":"No jobs yet.",
+  "скачивание":"download", "распознавание":"transcription", "анализ":"analysis", "моменты":"moments", "рендер":"render",
+  "обложка":"cover", "пост":"post", "отправка":"sending", "готово":"done", "ошибка":"error", "идёт":"running",
+  "в очереди":"queued", "новое":"new", "на проверку":"needs review", "есть":"set", "нет":"missing",
+  "сервер не отвечает":"server is not responding", "кадр":"frame", "нейросеть":"AI", "ещё не готов":"not ready yet",
+  "Мелкая строка сверху":"Small top line", "Заголовок (перенос строки — «|»)":"Title (line break — “|”)",
+  "Жёлтая подпись снизу":"Yellow bottom caption", "Начало, с":"Start, s", "Конец, с":"End, s",
+  "Перерендерить":"Re-render", "В Telegram":"To Telegram", "скачать":"download",
+  "задай TG_BOT_TOKEN и TG_CHAT_ID и перезапусти":"set TG_BOT_TOKEN and TG_CHAT_ID and restart",
+  "Переделать":"Redo", "Всё в Telegram":"All to Telegram", "Всё равно отправить":"Send anyway",
+  "Пост ВК и пакет Shorts":"VK post and Shorts pack", "пост появится после шага «пост»":"the post appears after the “post” step",
+  "Сохранить правку":"Save edit", "Скопировать":"Copy", "Написать заново":"Rewrite", "Пост в Telegram":"Post to Telegram",
+  "Журнал":"Log", "поставлено в очередь":"queued", "отправка поставлена в очередь":"sending queued",
+  "отправка без остановки на проверке":"sending without stopping for review", "пост сохранён":"post saved",
+  "пишу пост заново":"rewriting the post", "пост уходит в Telegram":"post is going to Telegram", "скопировано":"copied",
+  "вставь ссылку или путь":"paste a URL or path", "задание создано":"job created", "Язык / Language":"Language / Язык",
+};
+const RULES = [
+  [/^Клип (\d+)/, "Clip $1"], [/^клип (\d+) перерендеривается$/, "clip $1 is re-rendering"],
+  [/^клип (\d+) уходит в Telegram$/, "clip $1 is going to Telegram"], [/^с шага: (.+)$/, m => "from step: " + L(m[1])],
+  [/^обложка, (.+)$/, m => "cover, " + L(m[1])], [/в работе: /g, "running: "], [/в очереди: /g, "queued: "],
+  [/клипов: /g, "clips: "], [/озвучка: /g, "voiceover: "], [/: есть/g, ": set"], [/: нет/g, ": missing"],
+  [/(\d) с(?![А-Яа-яЁё])/g, "$1 s"],
+];
+let LANG = localStorage.getItem("konveyer.lang") || "";
+function L(s) {
+  if (LANG !== "en" || typeof s !== "string" || !/[А-Яа-яЁё]/.test(s)) return s;
+  const t = s.trim();
+  if (EN[t] !== undefined) return s.replace(t, EN[t]);
+  let out = s;
+  for (const [re, to] of RULES) {
+    if (typeof to === "function") { const m = out.match(re); if (m) out = out.replace(re, to(m)); }
+    else out = out.replace(re, to);
+  }
+  return out;
+}
+const ORIG = new WeakMap();
+const SKIP = "pre.log, textarea, .t, .why, h2, .err, .note, script, style";
+function translateDom(root) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const n of nodes) {
+    if (n.parentElement && n.parentElement.closest(SKIP)) continue;
+    if (!ORIG.has(n)) ORIG.set(n, n.nodeValue);
+    n.nodeValue = L(ORIG.get(n));
+  }
+  root.querySelectorAll("[placeholder],[title],[alt]").forEach(el => {
+    if (el.closest(SKIP) && el.tagName !== "TEXTAREA") return;
+    for (const a of ["placeholder", "title", "alt"]) {
+      if (!el.hasAttribute(a)) continue;
+      const k = "orig" + a;
+      if (el.dataset[k] === undefined) el.dataset[k] = el.getAttribute(a);
+      el.setAttribute(a, L(el.dataset[k]));
+    }
+  });
+}
+let STEP_RU = STEP_RU_SRC, STATE_RU = STATE_RU_SRC;
+function applyLang(lang) {
+  LANG = lang === "en" ? "en" : "ru";
+  localStorage.setItem("konveyer.lang", LANG);
+  document.documentElement.lang = LANG;
+  const map = src => Object.fromEntries(Object.entries(src).map(([k, v]) => [k, L(v)]));
+  STEP_RU = map(STEP_RU_SRC); STATE_RU = map(STATE_RU_SRC);
+  $("#lang").value = LANG;
+  document.title = L("Видео-конвейер");
+  translateDom(document.body);
+}
+let selected = null, status = {}, lastDetail = "", editing = false;
+
+function toast(msg, bad) {
+  const t = $("#toast"); t.textContent = L(msg); t.style.display = "block";
+  t.style.borderColor = bad ? "var(--bad)" : "var(--line)";
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = "none", 4000);
+}
+async function api(path, body) {
+  const opt = body === undefined ? {} : {method:"POST", body:JSON.stringify(body),
+              headers:{"Content-Type":"application/json", "X-Konveyer":"1", "X-Konveyer-Lang":LANG}};
+  if (!opt.headers) opt.headers = {"X-Konveyer-Lang": LANG};
+  const r = await fetch(path, opt);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fileUrl = (id, f, v) => `/files/${encodeURIComponent(id)}/${f.split("/").map(encodeURIComponent).join("/")}?v=${v||0}`;
+
+async function loadStatus() {
+  try {
+    status = await api("/api/status");
+    const keys = Object.entries(status.secrets).map(([k, v]) => `${k}: ${v ? "есть" : "нет"}`).join(" · ");
+    if (!LANG) applyLang(status.lang || "ru");
+    $("#status").textContent = L((status.active ? `в работе: ${status.active} · ` : "") +
+      (status.queued ? `в очереди: ${status.queued} · ` : "") + keys);
+  } catch (e) { $("#status").textContent = L("сервер не отвечает"); }
+}
+async function loadJobs() {
+  const jobs = await api("/api/jobs");
+  $("#jobs").innerHTML = jobs.map(j => `
+    <div class="job ${j.id === selected ? "sel" : ""}" data-id="${esc(j.id)}">
+      <div class="t">${esc(j.title)}</div>
+      <div class="m"><span class="st-${esc(j.state)}">${STATE_RU[j.state] || esc(j.state)}${j.current && j.state !== "done" ? " · " + (STEP_RU[j.current] || esc(j.current)) : ""}</span>
+        · клипов: ${j.clips} · ${esc(j.created || "")}</div>
+    </div>`).join("") || '<p class="muted">Заданий пока нет.</p>';
+  translateDom($("#jobs"));
+  document.querySelectorAll(".job").forEach(el => el.onclick = () => { selected = el.dataset.id; lastDetail = ""; refresh(); });
+}
+
+function coverStrip(job, c, v) {
+  const covers = c.covers || {};
+  const items = [["frame", "кадр"], ["ai", "нейросеть"]].filter(([k]) => covers[k]);
+  if (!items.length) return "";
+  const note = covers.title ? " · " + esc(covers.title) : "";
+  return `<div class="covers">${items.map(([k, label]) => `
+    <figure><img alt="обложка, ${label}" src="${fileUrl(job.id, covers[k], v)}">
+    <figcaption>${label}${note}</figcaption></figure>`).join("")}</div>`;
+}
+function clipCard(job, c, busy) {
+  const v = Math.round((c.rendered_at || 0) + ((c.covers && c.covers.time) || 0));
+  const poster = (c.covers && (c.covers.frame || c.covers.ai)) || c.cover;
+  const wide = c.full || c.layout === "wide";
+  const media = c.file ? `<video src="${fileUrl(job.id, c.file, v)}" controls preload="metadata"
+                   style="aspect-ratio:${wide ? "16/9" : "9/16"}"
+                   ${poster ? `poster="${fileUrl(job.id, poster, v)}"` : ""}></video>`
+                       : `<div class="muted" style="aspect-ratio:${wide ? "16/9" : "9/16"};display:grid;place-items:center;background:#000;border-radius:8px">ещё не готов</div>`;
+  const info = c.file ? `${(c.out_duration ?? (c.end - c.start)).toFixed(1)} с · ${esc(c.layout || "")} · ${esc(c.encoder || "")}` : "";
+  return `<div class="box clip" data-clip="${c.id}">
+    <h3>Клип ${c.id} <span class="muted">${c.start.toFixed(1)}–${c.end.toFixed(1)} с</span></h3>
+    ${media}
+    ${coverStrip(job, c, v)}
+    <div class="muted" style="font-size:12px;margin-top:4px">${info} ${c.captions ? "· " + esc(c.captions) : ""} ${c.voice ? "· озвучка: " + esc(c.voice) : ""}</div>
+    <div class="why">${esc(c.reason || "")}</div>
+    <label>Мелкая строка сверху</label><input data-k="kicker" value="${esc(c.kicker)}">
+    <label>Заголовок (перенос строки — «|»)</label><input data-k="title" value="${esc(c.title)}">
+    <label>Жёлтая подпись снизу</label><input data-k="bottom" value="${esc(c.bottom)}">
+    <div class="row">
+      <div><label>Начало, с</label><input data-k="start" type="number" step="0.1" value="${c.start}"></div>
+      <div><label>Конец, с</label><input data-k="end" type="number" step="0.1" value="${c.end}"></div>
+      <div><label>Раскладка</label><select data-k="layout">
+        ${["auto","blur","full","smart"].map(o => `<option ${o === (c.layout_req || "auto") ? "selected" : ""}>${o}</option>`).join("")}
+      </select></div>
+    </div>
+    <label>Зум картинки <b>${Number(c.zoom ?? (job.options && job.options.zoom) ?? 1.0).toFixed(1)}</b></label>
+    <input data-k="zoom" type="range" min="1" max="2" step="0.1" value="${c.zoom ?? (job.options && job.options.zoom) ?? 1.0}">
+    <div class="actions">
+      <button data-act="rerender" ${busy ? "disabled" : ""}>Перерендерить</button>
+      <button class="ghost" data-act="sendclip" ${busy || !c.file ? "disabled" : tgAttr()}>В Telegram</button>
+      ${c.file ? `<a href="${fileUrl(job.id, c.file, v)}" download>скачать</a>` : ""}
+    </div>
+  </div>`;
+}
+
+const tgReady = () => !!(status.secrets && status.secrets.TG_BOT_TOKEN && status.secrets.TG_CHAT_ID);
+const tgAttr = () => tgReady() ? "" : 'disabled title="задай TG_BOT_TOKEN и TG_CHAT_ID и перезапусти"';
+
+function renderDetail(d) {
+  const job = d.job, busy = (status.pending || []).includes(job.id);
+  const steps = d.steps.map(s => {
+    const st = (job.steps[s] || {}).status;
+    const cls = st === "done" ? "done" : st === "failed" ? "failed" : (job.current === s && busy) ? "cur" : "";
+    const sec = (job.steps[s] || {}).sec;
+    return `<span class="${cls}">${STEP_RU[s]}${sec !== undefined ? " " + sec + " с" : ""}</span>`;
+  }).join("");
+  const m = job.meta || {};
+  $("#detail").innerHTML = `
+    <div class="box">
+      <h2 style="margin:0 0 4px;font-size:17px">${esc(m.title || job.source)}</h2>
+      <div class="muted">${esc(m.uploader || "")} ${m.duration ? "· " + Math.round(m.duration) + " с" : ""}
+        ${m.width ? "· " + m.width + "×" + m.height : ""} · <span class="st-${esc(job.state)}">${STATE_RU[job.state] || esc(job.state)}</span></div>
+      <div class="muted" style="font-size:12px;word-break:break-all">${esc(job.source)}</div>
+      <div class="steps">${steps}</div>
+      ${m.speech_note ? `<div class="note">${esc(m.speech_note)}${m.speech_reason ? " (" + esc(m.speech_reason) + ")" : ""}</div>` : ""}
+      ${(job.deepseek && job.deepseek.summary) ? `<div class="muted">${esc(job.deepseek.summary)}</div>` : ""}
+      ${job.error ? `<div class="err">${esc(job.error)}</div>` : ""}
+      <div class="actions">
+        <select id="redoFrom" style="width:auto">${d.steps.map(s => `<option value="${s}" ${s === "moments" ? "selected" : ""}>с шага: ${STEP_RU[s]}</option>`).join("")}</select>
+        <button class="ghost" id="redo" ${busy ? "disabled" : ""}>Переделать</button>
+        <button id="sendAll" ${busy || !job.clips.length ? "disabled" : tgAttr()}>Всё в Telegram</button>
+        ${job.state === "review" ? `<button id="forceSend" ${busy ? "disabled" : tgAttr()}>Всё равно отправить</button>` : ""}
+      </div>
+    </div>
+    <div class="clips">${job.clips.map(c => clipCard(job, c, busy)).join("")}</div>
+    <div class="box">
+      <h3 style="margin:0 0 6px">Пост ВК и пакет Shorts</h3>
+      <textarea id="post" rows="16" placeholder="пост появится после шага «пост»">${esc(d.post)}</textarea>
+      <div class="actions">
+        <button class="ghost" id="savePost">Сохранить правку</button>
+        <button class="ghost" id="copyPost">Скопировать</button>
+        <button class="ghost" id="regenPost" ${busy ? "disabled" : ""}>Написать заново</button>
+        <button class="ghost" id="sendPost" ${busy || !d.post ? "disabled" : tgAttr()}>Пост в Telegram</button>
+      </div>
+    </div>
+    <div class="box"><h3 style="margin:0 0 6px">Журнал</h3><pre class="log" id="log">${esc(d.log)}</pre></div>`;
+  translateDom($("#detail"));
+  const log = $("#log"); log.scrollTop = log.scrollHeight;
+  bindDetail(job);
+}
+
+function bindDetail(job) {
+  const run = async (fn, ok) => { try { await fn(); toast(ok); lastDetail = ""; refresh(); } catch (e) { toast(e.message, true); } };
+  $("#redo").onclick = () => run(() => api(`/api/jobs/${job.id}/redo`, {from: $("#redoFrom").value}), "поставлено в очередь");
+  $("#sendAll").onclick = () => run(() => api(`/api/jobs/${job.id}/send`, {}), "отправка поставлена в очередь");
+  if ($("#forceSend")) $("#forceSend").onclick = () => run(() => api(`/api/jobs/${job.id}/send`, {force: true}), "отправка без остановки на проверке");
+  $("#savePost").onclick = () => run(() => api(`/api/jobs/${job.id}/post_text`, {text: $("#post").value}), "пост сохранён");
+  $("#regenPost").onclick = () => run(() => api(`/api/jobs/${job.id}/post`, {}), "пишу пост заново");
+  $("#sendPost").onclick = () => run(() => api(`/api/jobs/${job.id}/send`, {clips:false, post:true}), "пост уходит в Telegram");
+  $("#copyPost").onclick = () => navigator.clipboard.writeText($("#post").value).then(() => toast("скопировано"));
+  document.querySelectorAll(".clip").forEach(card => {
+    const id = +card.dataset.clip;
+    card.querySelector('[data-act="rerender"]').onclick = () => {
+      const body = {}; card.querySelectorAll("[data-k]").forEach(el => body[el.dataset.k] = el.value);
+      run(() => api(`/api/jobs/${job.id}/clips/${id}`, body), `клип ${id} перерендеривается`);
+    };
+    card.querySelector('[data-act="sendclip"]').onclick = () =>
+      run(() => api(`/api/jobs/${job.id}/send`, {clips:true, post:false, only:[id]}), `клип ${id} уходит в Telegram`);
+  });
+  document.querySelectorAll("#detail input, #detail textarea, #detail select").forEach(el => {
+    el.addEventListener("focus", () => editing = true);
+    el.addEventListener("blur", () => editing = false);
+  });
+}
+
+async function refresh() {
+  await loadStatus();
+  await loadJobs().catch(() => {});
+  if (status.defaults && !$("#zoom").dataset.touched) {
+    $("#zoom").value = status.defaults.zoom;
+    $("#zoomVal").textContent = Number(status.defaults.zoom).toFixed(1);
+  }
+  if (status.defaults && !$("#subs_style").dataset.touched) {
+    $("#subs_style").value = status.defaults.subs_style || "normal";
+  }
+  if (!selected) return;
+  try {
+    const d = await api(`/api/jobs/${encodeURIComponent(selected)}`);
+    const key = JSON.stringify([d.job, d.post, (status.pending || []).includes(selected)]);
+    if (key !== lastDetail && !editing) { lastDetail = key; renderDetail(d); }
+    else if (!editing) { const log = $("#log"); if (log && log.textContent !== d.log) { log.textContent = d.log; log.scrollTop = log.scrollHeight; } }
+  } catch (e) { $("#detail").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+}
+
+$("#go").onclick = async () => {
+  const body = {source: $("#src").value.trim(), count: $("#count").value, min: $("#min").value,
+                max: $("#max").value, layout: $("#layout").value, voice_speaker: $("#voice_speaker").value,
+                zoom: $("#zoom").value, subs_style: $("#subs_style").value};
+  ["tighten", "no_translate", "no_captions", "no_titles", "force_captions", "voice", "voice_no_subs",
+   "separate", "no_llm", "no_speakers", "one_voice", "score", "vision_check", "tg", "full", "no_cover"].forEach(k => body[k] = $("#" + k).checked);
+  body.cover_mode = $("#cover_mode").value;
+  body.full_from = $("#full_from").value.trim();
+  body.full_to = $("#full_to").value.trim();
+  if (!body.source) return toast("вставь ссылку или путь", true);
+  try { const r = await api("/api/jobs", body); selected = r.id; lastDetail = ""; $("#src").value = ""; toast("задание создано"); refresh(); }
+  catch (e) { toast(e.message, true); }
+};
+$("#zoom").addEventListener("input", () => {
+  $("#zoom").dataset.touched = "1";
+  $("#zoomVal").textContent = Number($("#zoom").value).toFixed(1);
+});
+$("#subs_style").addEventListener("change", () => { $("#subs_style").dataset.touched = "1"; });
+$("#src").addEventListener("keydown", e => { if (e.key === "Enter") $("#go").click(); });
+$("#lang").addEventListener("change", () => { applyLang($("#lang").value); lastDetail = ""; refresh(); });
+if (LANG) applyLang(LANG);
+refresh(); setInterval(refresh, 2000);
+</script>
+</body>
+</html>

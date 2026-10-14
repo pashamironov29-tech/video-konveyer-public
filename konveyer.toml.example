@@ -1,0 +1,213 @@
+# Скопируй в konveyer.toml и правь. Здесь только настройки — ключей и токенов тут нет и не будет:
+# DEEPSEEK_API_KEY, TG_BOT_TOKEN, TG_CHAT_ID берутся из переменных окружения.
+
+# Interface language / язык интерфейса: "ru" or "en".
+# Also: CLI flag --lang en, env KONVEYER_LANG=en, or the RU/EN switch in the web UI.
+[ui]
+lang = "ru"
+
+[paths]
+jobs_dir = "jobs"                         # куда складывать задания
+subs_dir = ""                             # необязательно: папка с вашим subs.py (свой промпт перевода)
+
+[ingest]
+max_height = 1080
+cookies_file = ""                         # свой cookies.txt для yt-dlp / your cookies.txt, e.g. "cookies/youtube_cookies.txt" (git-ignored)
+cookies_from_browser = ""                 # "firefox" или "chrome", если Instagram/X просят вход
+
+[whisper]
+device = "auto"                           # auto | cuda | cpu
+model_gpu = "large-v3"                    # ПК с видеокартой NVIDIA
+model_cpu = "small"                       # ноут; можно "medium" — точнее, но медленнее
+language = ""                             # "" — определить самому
+
+# Речи нет / речь ненадёжна: субтитры и перевод пропускаются, в пост транскрипт не попадает.
+# Сильный сигнал (один) уже отключает. Слабые копятся: нужно weak_to_reject штук.
+# Живая речь (en/ru около 100%, нормальный logprob) эти пороги не задевает.
+[speech]
+max_compression_ratio = 2.4               # сильный, порог самого Whisper
+max_char_run_ratio = 0.30                 # сильный: «ルルル», «ррр»
+max_top_word_ratio = 0.60                 # сильный: одно слово ≥ 60% всех слов
+min_words_for_repeat = 4
+combo_no_speech = 0.80                    # сильный вместе с combo_logprob
+combo_logprob = -0.8
+weak_to_reject = 2
+min_language_prob = 0.85                  # слабый: 74% из музыкального ролика — ниже, 100% — выше
+max_no_speech_prob = 0.60                 # слабый, порог тишины Whisper
+min_avg_logprob = -1.0                    # слабый, порог уверенности Whisper
+min_speech_ratio = 0.12                   # слабый: доля времени с речью; при vad_filter это сигнал VAD
+min_duration_for_ratio = 8
+min_unique_word_ratio = 0.35
+min_words_for_unique = 6
+
+[moments]
+count = 3
+min_sec = 15
+max_sec = 60
+whole_if_shorter = 75                     # короче — один клип целиком
+use_llm = true
+
+[render]
+layout = "auto"                           # auto | blur | full | smart
+captions = true
+titles = true                             # false — клип без заголовка, строки сверху и жёлтой подписи
+karaoke = true
+translate = true
+caption_upper = false
+caption_size = 74
+tighten = false                           # вырезать паузы в речи
+encoder = "auto"                          # auto | h264_nvenc | h264_qsv | h264_amf | libx264
+crf = 20
+# Shorts из горизонтального видео: кадр 16:9 целиком по ширине 1080, сверху и снизу размытый фон,
+# заголовок и субтитры на фоне, не на лицах. Старый зум (крупнее, бока обрезаны): zoom = 1.5
+zoom = 1.0
+zoom_center = false                       # true — зум ровно по центру, без слежения за лицом (--zoom-center)
+
+[subs]
+style = "normal"                          # normal | big (крупные субтитры по 1–2 слова)
+speakers = true                           # разные цвета субтитров по спикерам; --no-speakers выключает
+speaker_colors = ["#FFFFFF", "#FFE14A", "#7EC8FF"]   # S1, S2, S3… белый, жёлтый, голубой
+speaker_fonts = []                        # пусто — один шрифт; иначе по спикеру, например ["Arial", "Segoe UI"]
+diarize_model = "pyannote/speaker-diarization-3.1"
+diarize_device = "auto"                   # auto | cuda | cpu
+# hf_token = ""                           # лучше переменная HF_TOKEN, этот файл не коммитить с секретом
+
+# Русская озвучка переведённых реплик (флаг --voice, галочка «Русская озвучка»).
+[voice]
+# Edge: потоков одновременно, таймаут запроса (с), выключатель (неудач подряд) и отдых (с),
+# лимит на озвучку задания (мин, 0 — без лимита; дальше — запасной голос с отметкой сторожа).
+edge_workers = 4
+edge_timeout = 20
+edge_breaker = 12
+edge_rest_sec = 30
+edge_budget_min = 45
+enabled = false
+engine = "edge"                           # edge | silero | xtts (клон голоса, нужен sample)
+model_path = "models/silero/v4_ru.pt"   # Silero v4_ru, только для engine = "silero"
+speaker = "brian"                         # edge: brian, dmitry, svetlana, ava, emma, florian, seraphina
+per_speaker = true                        # по умолчанию у каждого спикера свой голос; --one-voice выключает
+speaker_voices = ["brian", "ava", "florian", "emma", "dmitry", "seraphina", "svetlana"]  # если пол не ясен
+male_voices = ["brian", "florian", "dmitry"]          # мужской голос. andrew нет
+female_voices = ["ava", "emma", "seraphina", "svetlana"]  # женский голос
+edge_rate = "+0%"                         # базовый темп Edge; интонация и ускорение прибавляются к нему
+edge_pitch = "+0Hz"
+edge_max_rate = 1.15                      # ускорение пересинтезом Edge, не сильнее +15% (только fit)
+voice_mode = "voiceover"                 # voiceover — закадр в естественном темпе; fit — подогнать под окно
+strip_commas = true                       # перед синтезом убрать запятые, тире и многоточия; точки и вопросы остаются
+voice_check = true                        # после клипа сверить озвучку с субтитрами
+voice_check_min = 7                       # ниже — клип не уходит в Telegram
+device = "auto"                           # auto | cuda | cpu — это для Silero
+subs = true                               # false — с озвучкой без субтитров (--voice-no-subs)
+max_tempo = 1.3                           # потолок ускорения; у Edge сначала rate, atempo — запасной
+shorten = true
+duck_db = -18                             # насколько тише оригинал под озвучкой
+duck_fade = 0.15                          # плавность приглушения, с
+gain_db = 0
+separate = false                          # demucs: убрать голос оригинала (--separate)
+demucs_model = "htdemucs"
+sample = ""                               # xtts: чистая запись голоса 10–30 с, только с согласия владельца
+xtts_python = ""                          # python.exe venv с coqui-tts, например xtts-venv/Scripts/python.exe
+# Частые слова для озвучки. Цифры и остальная латиница переводятся сами.
+# Пустое значение слово не подменяет. Субтитры этим словарём не меняются.
+replacements = { GPT = "джи-пи-ти", AI = "эй-ай" }
+
+# Интонация Edge по фразе. --voice-flat выключает (enabled = false).
+# Паузы между предложениями остаются и при выключенной интонации.
+[voice.expression]
+enabled = true
+pause_ms = 300
+ellipsis_ms = 500
+serious_chars = 80
+question_pitch = "+8Hz"
+exclamation_pitch = "+12Hz"
+exclamation_rate = "+8%"
+serious_pitch = "-4Hz"
+serious_rate = "-5%"
+ellipsis_rate = "-8%"
+ellipsis_volume = "-10%"
+
+# Перед Telegram: кадры, субтитры, звук и ffprobe включены всегда.
+# Оценка DeepSeek и Ollama выключены, пока не передать --score / --vision-check.
+[quality]
+min_score = 6                             # клип ниже этого балла не уходит, если включён --score
+ollama_url = "http://127.0.0.1:11434"
+vision_model = "qwen2.5vl"               # или llava — локальная модель, которая видит кадр
+shorts_max_sec = 60
+
+# Целое видео для ВК: py -m konveyer run «ссылка» --full
+# Горизонтальный 16:9, исходное разрешение не выше 1080p, без зума и без размытого фона.
+[full]
+max_height = 1080                     # не увеличивать и не брать выше 1080p
+caption_size = 0                      # 0 — от высоты кадра (6,5%: на 1080p 70 px); иначе px
+caption_margin = 0                    # 0 — отступ снизу 6% высоты; иначе px
+caption_box = true                    # тёмная полупрозрачная подложка под субтитрами
+max_chars = 42                        # длина одной реплики
+translate_batch = 30                  # реплик в одном запросе перевода
+translate_chars = 6000                # и не больше стольких символов в запросе
+lag_sec = 2.0                         # отставание русского, дальше которого не уходим
+tail_sec = 3.0                        # стоп-кадр в конце, не дольше
+voice_rate = "+8%"                    # базовый темп закадра целого ролика
+fade_sec = 0.5                        # фейд картинки, если в конце дописываем последний кадр
+telegram_max_mb = 50                  # больше — сжатая копия или только путь
+telegram_compress = true              # video_tg.mp4, если файл больше порога
+telegram_target_mb = 48               # во сколько метить сжатую копию
+min_video_kbps = 300                  # ниже этого битрейта не жмём, в чат только путь
+voice_check_samples = 4               # сколько фрагментов слушать, не весь ролик
+voice_check_window = 18               # секунд речи в одном фрагменте
+topics = 8                            # таймкодов в посте
+progress_sec = 20                     # как часто писать, что кодирование ещё идёт
+voice_batch = 20                      # фраз озвучки между строками прогресса
+
+[llm]
+model = "deepseek-chat"
+temperature = 0.9
+# Доллары за 1 млн токенов для строки «DeepSeek: N токенов, ≈ $X».
+# Непик Flash, октябрь 2026 (deepseek-chat идёт по цене Flash). Пик примерно вдвое дороже:
+# https://api-docs.deepseek.com/quick_start/pricing
+# Поставь 0 всем трём — в журнале останутся только токены, без суммы.
+price_input = 0.15                        # вход, cache miss
+price_output = 0.60
+price_cache_hit = 0.003                   # вход, prompt_cache_hit_tokens
+
+[post]
+group = "My channel"
+shorts_hashtags = "#shorts #россия"
+# Все посты (Shorts, целое видео, запасной): абзац начинается с эмодзи, перед «Таймкоды:» — ⏱,
+# в конце 6–10 хештегов: постоянные ниже + тематические от DeepSeek (компании, имена).
+emoji = true
+hashtags_on = true
+hashtags = "#ИИ #нейросети #искусственныйинтеллект #интервью #технологии"
+# Своё описание к каждому Shorts: 2–3 абзаца с эмодзи по этому клипу, вопрос, хештеги + #shorts.
+# Файл clips/clip_NN/description.md; до 1024 символов — подпись к видео, длиннее — сообщение следом.
+clip_desc = true
+
+[telegram]
+max_mb = 50
+send_cover = false
+shorts_post = false                      # общий пост после Shorts (send --shorts-post — разово)
+
+# Обложка для клика в ВК. Shorts — 1080×1920, целое видео — 1280×720, JPEG до 2 МБ.
+# mode: frame — кадр из ролика (по умолчанию), ai — фон с Pollinations, both — обе.
+# ИИ-обложка выключена по умолчанию: включить — mode = "ai" или "both".
+# Если нейросеть не ответила, остаётся кадр. Заголовок пишет DeepSeek, шрифт Russo One.
+[cover]
+enabled = true
+mode = "frame"
+font = ""                                # пусто — assets/fonts/RussoOne-Regular.ttf
+max_words = 5
+text_color = "#FFFFFF"
+accent_color = "#FFE14A"                 # плашка с именем спикера
+stroke_color = "#000000"
+
+[web]
+host = "127.0.0.1"
+port = 8765
+
+# Автоочистка. После УСПЕШНОЙ отправки в Telegram из папки задания удаляются исходники
+# (скачанное видео) и промежуточные файлы: аудио, озвучка, кэш, временные рендеры, кадры.
+# Остаются готовые ролики, обложки, посты/описания и job.json. Не ушло — ничего не удаляется.
+# При каждом запуске задания старше keep_days удаляются целиком (только отправленные).
+# Проверить без удаления: py -m konveyer cleanup --dry-run
+[cleanup]
+enabled = true
+keep_days = 3

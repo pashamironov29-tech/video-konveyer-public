@@ -1,0 +1,10 @@
+yt-dlp>=2026.8
+faster-whisper>=1.1
+numpy>=1.26
+pillow>=10
+num2words>=0.5.14
+edge-tts>=6.1.9
+openai>=1.40
+requests>=2.31
+mediapipe>=0.10
+pytest>=8.0

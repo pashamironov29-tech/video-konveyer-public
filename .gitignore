@@ -1,0 +1,41 @@
+# secrets / секреты
+.env
+.env.*
+!.env.example
+*cookies*.txt
+cookies/*
+!cookies/README.md
+konveyer.toml
+konveyer.toml.bak*
+pronunciations.toml
+
+# outputs, media, models / результаты, медиа, модели
+jobs/
+_smoke/
+*.log
+*.mp4
+*.mkv
+*.webm
+*.mov
+*.m4a
+*.mp3
+*.wav
+*.part
+*.ytdl
+models/
+*.pt
+*.pth
+*.onnx
+
+# private post style files / личные файлы стиля поста
+prompts/*.md
+!prompts/README.md
+
+# python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+env/
+xtts-venv/
