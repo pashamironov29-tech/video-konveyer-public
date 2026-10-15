@@ -96,11 +96,13 @@ def _post(url, raw: str):
         return e.code, json.loads(e.read())
 
 
-@pytest.mark.parametrize("body", ['{"source": "x.mp4", "count": NaN}',
-                                  '{"source": "x.mp4", "count": 2.5}',
-                                  '{"source": "x.mp4", "count": 99}',
-                                  '{"source": "x.mp4", "zoom": Infinity}',
-                                  '{"source": "x.mp4", "min": 50, "max": 20}'])
-def test_web_rejects_bad_numbers(server, body):
+@pytest.mark.parametrize("body, error", [
+    ('{"source": "https://example.com/v", "count": NaN}', "count: expected a finite number"),
+    ('{"source": "https://example.com/v", "count": 2.5}', "count: must be an integer"),
+    ('{"source": "https://example.com/v", "count": 99}', "count: from 1 to 10"),
+    ('{"source": "https://example.com/v", "zoom": Infinity}', "zoom: expected a finite number"),
+    ('{"source": "https://example.com/v", "min": 50, "max": 20}', "min clip length is greater than max"),
+])
+def test_web_rejects_bad_numbers(server, body, error):
     status, data = _post(server + "/api/jobs", body)
-    assert status == 400 and data["error"] and not re.search("[А-Яа-яЁё]", data["error"])
+    assert status == 400 and data["error"] == error

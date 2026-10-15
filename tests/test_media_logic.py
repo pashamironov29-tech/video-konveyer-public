@@ -178,12 +178,11 @@ def test_build_graph_audio_follows_cut():
 # ------------------------------------------------------------------ facetrack
 
 def test_crop_track_follows_face_per_scene():
-    samples = [(0.0, 0.3), (0.5, 0.32), (1.0, 0.28), (2.5, 0.8), (3.0, 0.82), (3.5, None)]
+    # Сцена 0: медиана 0.30 → x 272. Сцена 2 с: медиана 0.33 → round(329.6) = 330 (не 328).
+    samples = [(0.0, 0.3), (0.5, 0.32), (1.0, 0.28), (2.5, 0.32), (3.0, 0.34), (3.5, None)]
     track = crop_track(samples, [2.0], 4.0, src_w=1920, crop_w=608)
     assert [t for t, _ in track] == [0.0, 2.0]
-    x0, x1 = track[0][1], track[1][1]
-    assert x0 == int(round(0.3 * 1920 - 304)) - (int(round(0.3 * 1920 - 304)) % 2)
-    assert x1 > x0 and x1 <= 1920 - 608 and x1 % 2 == 0
+    assert [x for _, x in track] == [272, 330]
 
 
 def test_crop_track_no_faces_centers():
