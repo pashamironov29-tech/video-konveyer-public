@@ -102,13 +102,22 @@ def test_send_video_shrinks_big_file(tmp_path, wide_video):
     size = path.stat().st_size
     s = FakeSession()
     tg = Telegram(FAKE_TOKEN, "1", s, max_mb=size * 0.8 / 2**20)
-    try:
+    tg.send_video(path)
+    name, sent_size, _ = s.posts[0]["files"]["video"]
+    shrunk = tmp_path / "клип_tg.mp4"
+    assert name == "клип_tg.mp4" and shrunk.is_file()
+    assert sent_size == shrunk.stat().st_size <= tg.max_bytes < size
+
+
+@needs_ffmpeg
+def test_send_video_refuses_when_shrink_cannot_fit(tmp_path, wide_video):
+    path = tmp_path / "клип.mp4"
+    shutil.copy(wide_video, path)
+    s = FakeSession()
+    tg = Telegram(FAKE_TOKEN, "1", s, max_mb=0.2)
+    with pytest.raises(KonveyerError, match="не влезает"):
         tg.send_video(path)
-    except KonveyerError as e:
-        assert "не влезает" in str(e)          # совсем маленький лимит: честный отказ
-        return
-    sent_size = s.posts[0]["files"]["video"][1]
-    assert sent_size <= tg.max_bytes and (tmp_path / "клип_tg.mp4").exists()
+    assert s.posts == []
 
 
 def _tg_env(monkeypatch):

@@ -207,7 +207,9 @@ def test_shade_darkens_the_text_side():
     colored = np.zeros((20, 20, 3), np.uint8)
     colored[:, :] = (180, 40, 40)
     richer = punch(colored)
-    assert richer[:, :, 0].mean() >= colored[:, :, 0].mean() - 1
+    # Плоский (180, 40, 40): насыщенность обязана заметно поднять красный и опустить зелёный.
+    assert richer[:, :, 0].mean() > colored[:, :, 0].mean() + 15
+    assert richer[:, :, 1].mean() < colored[:, :, 1].mean() - 5
 
 
 # ------------------------------------------------------------------ кадр

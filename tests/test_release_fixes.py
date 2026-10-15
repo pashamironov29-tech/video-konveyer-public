@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import collections
 import http.client
+import os
 import subprocess
 import threading
 import time
@@ -173,11 +174,18 @@ def test_take_local_copies_by_default_and_links_on_request(settings, tmp_path):
     b = Job.create(settings, str(src))
     dst2, _ = take_local(str(src), b, link=True)
     assert dst2.read_bytes() == b"video"
+    probe_src, probe_dst = tmp_path / "probe-src", tmp_path / "probe-dst"
+    probe_src.write_bytes(b"x")
     try:
-        same = dst2.stat().st_ino == src.stat().st_ino and src.stat().st_nlink > 1
+        os.link(probe_src, probe_dst)
+        links_work = (probe_dst.stat().st_ino == probe_src.stat().st_ino
+                      and probe_src.stat().st_nlink > 1)
     except OSError:
-        same = False
-    assert same or dst2.is_file()                       # FS без жёстких ссылок — откат на копию
+        links_work = False
+    if links_work:
+        assert dst2.stat().st_ino == src.stat().st_ino and src.stat().st_nlink > 1
+    else:
+        assert dst2.is_file()                           # FS без жёстких ссылок — откат на копию
 
 
 @needs_ffmpeg
