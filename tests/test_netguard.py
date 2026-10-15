@@ -21,7 +21,6 @@ def test_secrets_are_stripped_before_the_test(monkeypatch):
     monkeypatch.setenv("TG_BOT_TOKEN", "123456:FAKE-not-a-real-token")
     monkeypatch.setenv("TG_CHAT_ID", "1")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-fake-not-real")
-    assert os.environ["TG_BOT_TOKEN"].startswith("123456:")
 
 
 def test_guard_blocks_telegram_and_deepseek_hosts():
@@ -62,6 +61,7 @@ def test_telegram_deepseek_and_edge_stay_offline(monkeypatch, settings, tmp_path
         audio = eng.synth(["Привет"])
     except KonveyerError as exc:
         assert "edge-tts" in str(exc)
+        assert any("bing" in host.lower() for host in BLOCKED_HOSTS)
     else:
         assert audio == [None]
         assert BLOCKED_HOSTS

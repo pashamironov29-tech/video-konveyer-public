@@ -8,7 +8,7 @@ import numpy as np
 
 from conftest import FAKE_KEY, FakeLLM, FakeSession, FakeTranscriber, needs_ffmpeg
 from konveyer import cli, hardware
-from konveyer.facetrack import BLUR_FALLBACK, FaceFinder, _try_haar
+from konveyer.facetrack import FaceFinder, _try_haar
 from konveyer.hardware import Encoder
 from konveyer.jobs import Job
 from konveyer.layout import geometry
@@ -360,7 +360,6 @@ def test_doctor_mentions_deno(capsys, tmp_path, monkeypatch):
     out = capsys.readouterr().out
     assert code == 0
     assert "winget install DenoLand.Deno" in out and "deno.land" in out
-    assert BLUR_FALLBACK  # строка жива и не пустая
 
 
 def test_cli_force_flags():
